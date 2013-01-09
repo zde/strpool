@@ -12,6 +12,7 @@ cons:
 
 - only ints, strings, and non-circular lists
 - loader must supply the type information
+- optional data must follow an int
 
 ```
 integers are var-sized (0, 128, 16512)     => \x00\x80\x00\x80\x80\x00
