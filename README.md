@@ -10,7 +10,7 @@ pros:
 
 cons:
 
-- only ints, strings, and non-circular lists
+- only non-negative ints, strings, and non-circular lists
 - loader must supply the type information
 - optional data must follow an int
 
