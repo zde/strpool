@@ -16,6 +16,6 @@ enc('None & () are special', 3, 1)
 enc('6 = 3*2 + 0', 3, None)
 enc('7 = 3*2 + 1', 3, ('abc',))
 
-enc('dump vs', [('a',), ('b',)])
+enc('dump vs', ['a', 'b'])
 enc('dump_pool', [('a',), ('b',)])
 enc('dump_pool', ['a', 'b'])
