@@ -153,6 +153,10 @@ def parse(fn):
         name = provides(e.find('{http://linux.duke.edu/metadata/common}name').text)
         ver = versions(evr(e.find('{http://linux.duke.edu/metadata/common}version').get))
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
+        summ = e.find('{http://linux.duke.edu/metadata/common}summary').text
+        desc = e.find('{http://linux.duke.edu/metadata/common}description').text
+        if type(summ) is unicode: summ = summ.encode('UTF-8')
+        if type(desc) is unicode: desc = desc.encode('UTF-8')
         fil = []; prco = [(name, (2, ver))], [], [], [], []; tgt = None
         for v in e.find('{http://linux.duke.edu/metadata/common}format').getiterator():
             if v.tag == '{http://linux.duke.edu/metadata/common}file': fil.append(v.text)
@@ -174,7 +178,7 @@ def parse(fn):
                     f = f, versions(evr(get))
                 v = provides(get('name')), f
                 if v not in prco[t]: prco[t].append(v)
-        packages.append((arch, loc, prco))
+        packages.append((arch, loc, summ, desc, prco))
         e.clear()
     return arches, provides, versions, packages
 
@@ -192,15 +196,15 @@ def dump(fn, (arches, provides, versions, packages)):
     def enc((name, f)):
         if f: f = f[0], versions[f[1]]
         return provides[name], f
-    packages = [(arches[arch], loc) + tuple(map(enc, p) for p in prco)
-                for arch, loc, prco in packages]
+    packages = [(arches[arch], loc, summ, desc) + tuple(map(enc, p) for p in prco)
+                for arch, loc, summ, desc, prco in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
     # provides index
     index = [set() for i in provides]
     for n, po in enumerate(packages):
-        for p, f in po[2]: index[p].add(n)
+        for p, f in po[4]: index[p].add(n)
     def pack(ns):
         buf = strpool.buf()
         for n in sorted(ns): buf.dump(n)
@@ -213,20 +217,35 @@ class Package:
     def __str__(self):
         return '%s-%s.%s' % (self.name, self.ver, self.arch)
 
+from time import time
+_curr_tm = None, None
+
+def tm(x=None):
+    global _curr_tm
+    if _curr_tm[0]:
+        elapsed = time() - _curr_tm[1]
+        sys.stderr.write('%4.1f %s\n' % (elapsed * 1e3, _curr_tm[0]))
+    _curr_tm = x, time()
+
 class Repo:
     def __init__(self, fn):
         db = strpool.chunk(strpool.mmap(open(fn)))
         assert db.load_raw(4) == 'PKGS'
         self.arches   = db.load_pool()
+        tm('prov')
         self.provides = db.load_pool()
+        tm('ver')
         self.versions = db.load_pool()
+        tm('pkgs')
         self.packages = db.load_pool()
+        tm('index')
         self.index    = db.load_pool()
+        tm()
     def __len__(self):
         return len(self.packages)
     def __getitem__(self, n):
         pkg = self.packages[n]
-        arch, loc = pkg.load(0, '')
+        arch, loc, summ, desc = pkg.load(0, '', '', '')
         def dec((name, f)):
             if f: f = f[0], self.versions[f[1]]
             return self.provides[name], f
@@ -234,8 +253,11 @@ class Repo:
         ret = Package()
         ret.arch = self.arches[arch]
         ret.name, (eq, ret.ver) = prco[0][0]
+        ret.summ = summ
+        ret.desc = desc
         return ret
     def search(self, name):
+        tm('search')
         dup = set()
         i = self.provides.find(name)
         while i < len(self.provides):
@@ -250,6 +272,7 @@ class Repo:
                     po = self[n]
                     if po.name == prov:
                         yield po
+        tm(None)
 
 if __name__ == '__main__':
     for n, d in repos():
