@@ -393,10 +393,10 @@ chunk_compare(struct chunk *a, struct chunk *b)
         const uint8_t *aend = ap + a->size;
         const uint8_t *bend = bp + b->size;
         do {
-            if (ap == aend)
-                return bp == bend ? 0 : -1;
             if (bp == bend)
-                return +1;
+                return ap == aend ? 0 : +1;
+            if (ap == aend)
+                return -1;
             cmp = *ap++ - *bp++;
         } while (cmp == 0);
     }
@@ -625,8 +625,35 @@ pool_index(struct pool *self, PyObject *arg)
     Py_RETURN_NONE;
 }
 
+static PyObject*
+pool_find(struct pool *self, PyObject *arg)
+{
+    const uint8_t *buf;
+    size_t size;
+    unsigned low = 0, high = Py_SIZE(self);
+
+    if (PyObject_AsReadBuffer(arg, (const void**)&buf, &size))
+        return NULL;
+    while (low < high) {
+        unsigned i = 0, mid = (low + high)/2;
+        const uint8_t *item = self->buf + self->item[mid];
+        unsigned item_size = self->item[mid + 1] - self->item[mid];
+        while (1) {
+            if (i == size) goto ge;
+            if (i == item_size) goto lt;
+            if (item[i] > buf[i]) goto ge;
+            if (item[i] < buf[i]) goto lt;
+            i++;
+        }
+        ge: high = mid; continue;
+        lt: low = mid + 1; continue;
+    }
+    return PyInt_FromLong(low);
+}
+
 static PyMethodDef pool_methods[] = {
 { "index", (PyCFunction)pool_index, METH_O, },
+{ "find", (PyCFunction)pool_find, METH_O, },
 { NULL, NULL }};
 
 static PyTypeObject pool_type = {
