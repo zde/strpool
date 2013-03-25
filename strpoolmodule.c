@@ -257,7 +257,8 @@ buf_dump_pool(struct buf *self, PyObject *list)
     for (i = n; i--;) {
         const void *buf;
         PyObject *item = PyList_GET_ITEM(list, i);
-        if (!PyObject_AsReadBuffer(item, &buf, &size)) {
+        if (PyObject_CheckReadBuffer(item)) {
+            PyObject_AsReadBuffer(item, &buf, &size);
             pos = _buf_grow(self, pos, size);
             if (!pos) return NULL;
             memcpy(pos -= size, buf, size);
@@ -277,6 +278,7 @@ buf_dump_pool(struct buf *self, PyObject *list)
         while (s >= 0x80)
             s >>= 7, *--pos = --s | 0x80;
     }
+    free(items);
     s = n;
     *--pos = s & 0x7f;
     while (s >= 0x80)

@@ -123,6 +123,17 @@ def sync(fn, d):
         try: retrieve(fn, base, csum); return True
         except IOError, e: print e
 
+class Pool(dict):
+    def __call__(self, s):
+        return self.setdefault(s, s)
+    def list(self):
+        ret = sorted(self)
+        n = 0
+        for s in ret:
+            self[s] = n
+            n += 1
+        return ret
+
 def evr(get):
     ret = get('ver')
     e = get('epoch')
@@ -131,28 +142,15 @@ def evr(get):
     if e: ret = ret +'-'+ e
     return ret
 
-class Pool(dict):
-    def __call__(self, s):
-        ret = self.get(s)
-        if ret is None:
-            ret = self[s] = len(self)
-        return ret
-    def list(self):
-        l = [None] * len(self)
-        for s in self: l[self[s]] = s
-        return l
-
-import strpool
-
-def xml2db(fn, db):
+def parse(fn):
     arches = Pool()
     provides = Pool()
     versions = Pool()
     packages = []
     for _, e in ET.iterparse(open(fn)):
         if e.tag != '{http://linux.duke.edu/metadata/common}package': continue
-        name = provides(e.find('{http://linux.duke.edu/metadata/common}name').text)
         arch = arches(e.find('{http://linux.duke.edu/metadata/common}arch').text)
+        name = provides(e.find('{http://linux.duke.edu/metadata/common}name').text)
         ver = versions(evr(e.find('{http://linux.duke.edu/metadata/common}version').get))
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
         fil = []; prco = [(name, (2, ver))], [], [], [], []; tgt = None
@@ -176,35 +174,79 @@ def xml2db(fn, db):
                     f = f, versions(evr(get))
                 v = provides(get('name')), f
                 if v not in prco[t]: prco[t].append(v)
-        buf = strpool.buf()
-        buf.dump(arch, loc, *prco)
-        packages.append(str(buf))
+        packages.append((arch, loc, prco))
         e.clear()
+    return arches, provides, versions, packages
+
+import strpool
+
+def dump(fn, (arches, provides, versions, packages)):
+    write = open(fn, 'wb').write
+    # write header
+    write('PKGS')
+    for i in arches, provides, versions:
+        buf = strpool.buf()
+        buf.dump_pool(i.list())
+        write(buf)
+    # write packages
+    def enc((name, f)):
+        if f: f = f[0], versions[f[1]]
+        return provides[name], f
+    packages = [(arches[arch], loc) + tuple(map(enc, p) for p in prco)
+                for arch, loc, prco in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
-    for i in versions, provides, arches:
-        buf.dump_pool(i.list())
-    buf.dump_raw('PKGS')
-    open(db, 'wb').write(buf)
+    write(buf)
+    # provides index
+    index = [set() for i in provides]
+    for n, po in enumerate(packages):
+        for p, f in po[2]: index[p].add(n)
+    def pack(ns):
+        buf = strpool.buf()
+        for n in sorted(ns): buf.dump(n)
+        return str(buf)
+    buf = strpool.buf()
+    buf.dump_pool(map(pack, index))
+    write(buf)
+
+class Package:
+    def __str__(self):
+        return '%s-%s.%s' % (self.name, self.ver, self.arch)
 
 class Repo:
     def __init__(self, fn):
         db = strpool.chunk(strpool.mmap(open(fn)))
         assert db.load_raw(4) == 'PKGS'
-        self.arch = db.load_pool()
-        self.prov = db.load_pool()
-        self.ver  = db.load_pool()
-        self.pkgs = db.load_pool()
+        self.arches   = db.load_pool()
+        self.provides = db.load_pool()
+        self.versions = db.load_pool()
+        self.packages = db.load_pool()
+        self.index    = db.load_pool()
     def __len__(self):
-        return len(self.pkgs)
+        return len(self.packages)
     def __getitem__(self, n):
-        pkg = self.pkgs[n]
+        pkg = self.packages[n]
         arch, loc = pkg.load(0, '')
-        arch = self.arch[arch]
-        def decode((n, f)):
-            return self.prov[n], f and (f[0], self.ver[f[1]])
-        prco = [map(decode, pkg.load([(0, (0, 0))])[0]) for i in range(5)]
-        return arch, loc, prco
+        def dec((name, f)):
+            if f: f = f[0], self.versions[f[1]]
+            return self.provides[name], f
+        prco = tuple(map(dec, pkg.load([(0, (0, 0))])[0]) for i in range(5))
+        ret = Package()
+        ret.arch = self.arches[arch]
+        ret.name, (eq, ret.ver) = prco[0][0]
+        return ret
+    def search(self, name):
+        ns = set()
+        i = self.provides.find(name)
+        while i < len(self.provides):
+            if not str(self.provides[i]).startswith(name): break
+            pos = self.index[i]
+            while pos: ns.add(pos.load(0)[0])
+            i += 1
+        for n in sorted(ns):
+            po = self[n]
+            if str(po.name).startswith(name):
+                yield po
 
 if __name__ == '__main__':
     for n, d in repos():
@@ -213,10 +255,7 @@ if __name__ == '__main__':
         if not os.access(fn +'.db', os.R_OK):
             if not os.access(fn +'.xml', os.R_OK):
                 sync(fn +'.xml', d)
-            xml2db(fn +'.xml', fn +'.db')
-
-        # attempt to use it
+            dump(fn +'.db', parse(fn +'.xml'))
         repo = Repo(fn +'.db')
-        for arch, loc, prco in repo:
-            name, (x, ver) = prco[0][0]
-            print name, arch, ver
+        for po in repo.search(sys.argv[1]):
+            print po

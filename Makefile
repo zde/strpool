@@ -1,7 +1,7 @@
 MODULES = strpoolmodule.so
 
 all: $(MODULES)
-	python test.py
+	python sync.py
 
 .SUFFIXES: .so
 .c.so:
