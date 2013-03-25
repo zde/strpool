@@ -178,6 +178,7 @@ def parse(fn):
                     f = f, versions(evr(get))
                 v = provides(get('name')), f
                 if v not in prco[t]: prco[t].append(v)
+        prco[0].extend([(provides(n), None) for n in fil])
         packages.append((arch, loc, summ, desc, prco))
         e.clear()
     return arches, provides, versions, packages
