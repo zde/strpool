@@ -236,17 +236,20 @@ class Repo:
         ret.name, (eq, ret.ver) = prco[0][0]
         return ret
     def search(self, name):
-        ns = set()
+        dup = set()
         i = self.provides.find(name)
         while i < len(self.provides):
-            if not str(self.provides[i]).startswith(name): break
-            pos = self.index[i]
-            while pos: ns.add(pos.load(0)[0])
-            i += 1
-        for n in sorted(ns):
-            po = self[n]
-            if str(po.name).startswith(name):
-                yield po
+            prov = self.provides[i]
+            if not str(prov).startswith(name):
+                break
+            lst = self.index[i]; i += 1
+            while lst:
+                n = lst.load(0)[0]
+                if n not in dup:
+                    dup.add(n)
+                    po = self[n]
+                    if po.name == prov:
+                        yield po
 
 if __name__ == '__main__':
     for n, d in repos():
