@@ -75,8 +75,12 @@ class Http:
         self.cl -= len(buf)
         if self.cl == 0:
             conn[self.host] = self.sock
-            if self.csum and self.csum[0].hexdigest() != self.csum[1]:
-                raise IOError, '%s: checksum failed' % self.host
+            if self.csum:
+                h, csum = self.csum
+                if type(csum) is not list:
+                    csum = [csum]
+                if h.hexdigest() not in csum:
+                    raise IOError, '%s: checksum failed' % self.host
         return buf
 
     def __iter__(self):
@@ -90,13 +94,14 @@ class Http:
         if l: yield l
 
 def retrieve(fn, base, csum):
-    for ev, e in ET.iterparse(Http(base +'repodata/repomd.xml', csum)):
+    tee = open(fn +'.repomd', 'wb').write
+    for ev, e in ET.iterparse(Http(base +'repodata/repomd.xml', csum, tee=tee)):
         if e.tag != '{http://linux.duke.edu/metadata/repo}data': continue
         if e.get('type') != 'primary': continue
         href = e.find('{http://linux.duke.edu/metadata/repo}location').get('href')
         csum = e.find('{http://linux.duke.edu/metadata/repo}checksum')
         csum = csum.get('type'), csum.text
-    tee = os.popen('gzip -d >%s' % fn, 'wb').write
+    tee = os.popen('gzip -d >%s.xml' % fn, 'wb').write
     read = Http(base + href, csum, tee=tee).read
     while read(): pass
 
@@ -105,15 +110,19 @@ def sync(fn, d):
     try: base = d['baseurl'].split()
     except KeyError:
         url = d['mirrorlist']
-        base = Http(url, tee=open(fn +'.metalink', 'wb').write)
+        tee = open(fn +'.metalink', 'wb').write
+        base = Http(url, tee=tee)
         if '/metalink?' in url:
-            i = ET.iterparse(base); base = []
-            for ev, e in i:
+            csum = {}; best = None; out = []
+            for ev, e in ET.iterparse(base):
                 if e.tag == '{http://www.metalinker.org/}hash':
                     if e.get('type') in hashlib.algorithms:
-                        csum = e.get('type'), e.text
+                        best = e.get('type')
+                        csum.setdefault(best, []).append(e.text)
                 if e.tag == '{http://www.metalinker.org/}url':
-                    base.append(e.text)
+                    out.append(e.text)
+            csum = best, csum[best]
+            base = out
     for base in base:
         if not base.startswith('http://'): continue
         if base.endswith('/repodata/repomd.xml'): base = base[:-19]
@@ -227,7 +236,7 @@ def tm(title=None, *args):
     global _curr
     if title:
         elapsed = time() - _curr
-        sys.stderr.write('%6.3fms %s\n' % (elapsed * 1e3, title % args))
+        sys.stderr.write('%6.2fms %s\n' % (elapsed*1e3, title % args))
     _curr = time()
 
 class Repo:
@@ -260,28 +269,32 @@ class Repo:
         ret.summ = summ
         ret.desc = desc
         return ret
+
+class Sack(dict):
     def search(self, name):
         tm()
-        dup = set()
-        i = self.provides.find(name)
-        while i < len(self.provides):
-            prov, keys = self.provides[i]; i += 1
-            if not prov.startswith(name):
-                break
-            for n in keys:
-                if n in dup: continue
-                dup.add(n)
-                yield self[n]
-        tm('search "%s*"', name)
+        pkgs = []
+        for repo in self:
+            prov = self[repo].provides
+            keys = set()
+            i = prov.find(name)
+            while i < len(prov):
+                p, k = prov[i]
+                if not p.startswith(name): break
+                keys.update(k); i += 1
+            tm('search %s in %s => %d keys', name, repo, len(keys))
+            pkgs.extend(map(self[repo].__getitem__, keys))
+        return pkgs
 
 if __name__ == '__main__':
+    sack = Sack()
     for n, d in repos():
-        if n == 'updates': continue
         fn = '%s-%s-%s' % (n, var['releasever'], var['basearch'])
         if not os.access(fn +'.db', os.R_OK):
             if not os.access(fn +'.xml', os.R_OK):
-                sync(fn +'.xml', d)
+                sync(fn, d)
             dump(fn +'.db', parse(fn +'.xml'))
-        repo = Repo(fn +'.db')
-        for po in repo.search(sys.argv[1]):
-            print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
+        sack[n] = Repo(fn +'.db')
+    for po in sack.search(sys.argv[1]):
+        print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
+    tm('printout')
