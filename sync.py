@@ -124,7 +124,12 @@ def sync(fn, d):
         except IOError, e: print e
 
 class Pool(dict):
-    def __call__(self, s):
+    def __init__(self):
+        self.keys = {}
+    def __call__(self, s, key=None):
+        if type(key) is int:
+            l = self.keys.setdefault(s, [])
+            if not key in l: l.append(key)
         return self.setdefault(s, s)
     def list(self):
         ret = sorted(self)
@@ -132,6 +137,15 @@ class Pool(dict):
         for s in ret:
             self[s] = n
             n += 1
+        if self.keys:
+            def add_keys(s):
+                if s in self.keys:
+                    buf = strpool.buf()
+                    buf.dump(0, *tuple(self.keys[s]))
+                    buf.dump_raw(s)
+                    s = str(buf)
+                return s
+            ret = map(add_keys, ret)
         return ret
 
 def evr(get):
@@ -150,7 +164,8 @@ def parse(fn):
     for _, e in ET.iterparse(open(fn)):
         if e.tag != '{http://linux.duke.edu/metadata/common}package': continue
         arch = arches(e.find('{http://linux.duke.edu/metadata/common}arch').text)
-        name = provides(e.find('{http://linux.duke.edu/metadata/common}name').text)
+        name = e.find('{http://linux.duke.edu/metadata/common}name').text
+        name = provides(name, len(packages))
         ver = versions(evr(e.find('{http://linux.duke.edu/metadata/common}version').get))
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
         summ = e.find('{http://linux.duke.edu/metadata/common}summary').text
@@ -176,7 +191,7 @@ def parse(fn):
                     elif f == 'GE': f = 6
                     else: raise ValueError, f
                     f = f, versions(evr(get))
-                v = provides(get('name')), f
+                v = provides(get('name'), t == 0 and len(packages)), f
                 if v not in prco[t]: prco[t].append(v)
         prco[0].extend([(provides(n), None) for n in fil])
         packages.append((arch, loc, summ, desc, prco))
@@ -202,17 +217,27 @@ def dump(fn, (arches, provides, versions, packages)):
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
-    # provides index
-    index = [set() for i in provides]
-    for n, po in enumerate(packages):
-        for p, f in po[4]: index[p].add(n)
-    def pack(ns):
-        buf = strpool.buf()
-        for n in sorted(ns): buf.dump(n)
-        return str(buf)
-    buf = strpool.buf()
-    buf.dump_pool(map(pack, index))
-    write(buf)
+
+class Cache(dict):
+    def __init__(self, pool, keys=False):
+        self.pool = pool
+        self.keys = keys
+    def __getitem__(self, n):
+        ret = self.get(n)
+        if ret is None:
+            ret = self.pool[n]
+            if self.keys:
+                name = ''
+                while ret:
+                    c = ret.load_raw(1)
+                    if c == '\0': break
+                    name += c
+                keys = []
+                while ret:
+                    keys.append(ret.load(0)[0])
+                ret = name, keys
+            self[n] = ret
+        return ret
 
 class Package:
     def __str__(self):
@@ -234,13 +259,11 @@ class Repo:
         assert db.load_raw(4) == 'PKGS'
         self.arches   = db.load_pool()
         tm('prov')
-        self.provides = db.load_pool()
+        self.provides = Cache(db.load_pool(), keys=True)
         tm('ver')
         self.versions = db.load_pool()
         tm('pkgs')
         self.packages = db.load_pool()
-        tm('index')
-        self.index    = db.load_pool()
         tm()
     def __len__(self):
         return len(self.packages)
@@ -249,7 +272,7 @@ class Repo:
         arch, loc, summ, desc = pkg.load(0, '', '', '')
         def dec((name, f)):
             if f: f = f[0], self.versions[f[1]]
-            return self.provides[name], f
+            return self.provides[name][0], f
         prco = tuple(map(dec, pkg.load([(0, (0, 0))])[0]) for i in range(5))
         ret = Package()
         ret.arch = self.arches[arch]
@@ -260,14 +283,12 @@ class Repo:
     def search(self, name):
         tm('search')
         dup = set()
-        i = self.provides.find(name)
-        while i < len(self.provides):
-            prov = self.provides[i]
+        i = self.provides.pool.find(name)
+        while i < len(self.provides.pool):
+            prov, keys = self.provides[i]; i += 1
             if not prov.startswith(name):
                 break
-            lst = self.index[i]; i += 1
-            while lst:
-                n = lst.load(0)[0]
+            for n in keys:
                 if n not in dup:
                     dup.add(n)
                     po = self[n]
