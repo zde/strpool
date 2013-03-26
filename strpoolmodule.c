@@ -698,6 +698,14 @@ static PyMethodDef pool_methods[] = {
 { "find", (PyCFunction)pool_find, METH_O, },
 { NULL, NULL }};
 
+static PyObject*
+pool_repr(struct pool *self)
+{
+    PyObject *ret = PyString_FromFormat("<%s %p len %d flags %d>",
+        Py_TYPE(self)->tp_name, self->buf, Py_SIZE(self), self->flags);
+    return ret;
+}
+
 static PyTypeObject pool_type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "pool",
@@ -705,6 +713,7 @@ static PyTypeObject pool_type = {
     .tp_itemsize = sizeof(size_t),
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_dealloc = (destructor)pool_dealloc,
+    .tp_repr = (reprfunc)pool_repr,
     .tp_as_sequence = &pool_as_sequence,
     .tp_methods = pool_methods,
 };
