@@ -253,8 +253,10 @@ class Repo:
         tm('%d versions', len(self.versions))
         self.packages = db.load_pool()
         tm('%d packages', len(self.packages))
+
     def __len__(self):
         return len(self.packages)
+
     def __getitem__(self, n):
         pkg = self.packages[n]
         arch, loc, summ, desc = pkg.load(0, '', '', '')
@@ -269,22 +271,27 @@ class Repo:
         ret.desc = desc
         return ret
 
+    def search(self, prefix):
+        tm()
+        keys = set()
+        prov = self.provides
+        i = prov.find(prefix)
+        while i < len(prov):
+            p, k = prov[i]
+            if not p.startswith(prefix):
+                break
+            keys.update(k)
+            i += 1
+        tm('prefix %s => %d hits', prefix, len(keys))
+        po = map(self.__getitem__, keys)
+        tm('convert to po')
+        return po
+
 class Sack(dict):
-    def search(self, name):
-        pkgs = []
+    def search(self, *args, **kwargs):
         for repo in self:
-            tm()
-            prov = self[repo].provides
-            keys = set()
-            i = prov.find(name)
-            while i < len(prov):
-                p, k = prov[i]
-                if not p.startswith(name): break
-                keys.update(k); i += 1
-            tm('search %s in %s => %d keys', name, repo, len(keys))
-            pkgs.extend(map(self[repo].__getitem__, keys))
-            tm('convert to po')
-        return pkgs
+            for po in self[repo].search(*args, **kwargs):
+                yield po
 
 if __name__ == '__main__':
     sack = Sack()
@@ -297,4 +304,3 @@ if __name__ == '__main__':
         sack[n] = Repo(fn +'.db')
     for po in sack.search(sys.argv[1]):
         print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
-    tm('printout')
