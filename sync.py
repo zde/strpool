@@ -35,7 +35,7 @@ import socket, hashlib
 conn = {}
 
 class Http:
-    def __init__(self, url, csum=None):
+    def __init__(self, url, csum=None, tee=None):
         m = re.search('^(\w+)://(.+)', url)
         if m:
             proto, url = m.groups()
@@ -63,14 +63,15 @@ class Http:
         self.buf = self.buf[i + 4:]
         assert len(self.buf) <= self.cl, self.buf
         self.csum = csum and (hashlib.new(csum[0]), csum[1])
+        self.tee = tee
 
     def read(self, n=0x4000):
         if self.cl == 0:
             return ''
         buf = self.buf or self.sock.recv(self.cl)
         buf, self.buf = buf[:n], buf[n:]
-        if self.csum:
-            self.csum[0].update(buf)
+        if self.csum: self.csum[0].update(buf)
+        if self.tee: self.tee(buf)
         self.cl -= len(buf)
         if self.cl == 0:
             conn[self.host] = self.sock
@@ -95,19 +96,16 @@ def retrieve(fn, base, csum):
         href = e.find('{http://linux.duke.edu/metadata/repo}location').get('href')
         csum = e.find('{http://linux.duke.edu/metadata/repo}checksum')
         csum = csum.get('type'), csum.text
-    read = Http(base + href, csum).read
-    write = os.popen('gzip -d >%s' % fn, 'wb').write
-    while 1:
-        buf = read()
-        if not buf: break
-        write(buf)
+    tee = os.popen('gzip -d >%s' % fn, 'wb').write
+    read = Http(base + href, csum, tee=tee).read
+    while read(): pass
 
 def sync(fn, d):
     csum = None
     try: base = d['baseurl'].split()
     except KeyError:
         url = d['mirrorlist']
-        base = Http(url)
+        base = Http(url, tee=open(fn +'.metalink', 'wb').write)
         if '/metalink?' in url:
             i = ET.iterparse(base); base = []
             for ev, e in i:
