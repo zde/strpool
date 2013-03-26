@@ -201,7 +201,7 @@ def parse(fn):
                 v = provides(get('name'), t == 0 and len(packages)), f
                 if v not in prco[t]: prco[t].append(v)
         prco[0].extend([(provides(n), None) for n in fil])
-        packages.append((arch, loc, summ, desc, prco))
+        packages.append((arch, prco, loc, summ, desc))
         e.clear()
     return arches, provides, versions, packages
 
@@ -219,15 +219,11 @@ def dump(fn, (arches, provides, versions, packages)):
     def enc((name, f)):
         if f: f = f[0], versions[f[1]]
         return provides[name], f
-    packages = [(arches[arch], loc, summ, desc) + tuple(map(enc, p) for p in prco)
-                for arch, loc, summ, desc, prco in packages]
+    packages = [(arches[arch],) + tuple(map(enc, p) for p in prco) + (loc, summ, desc) 
+                for arch, prco, loc, summ, desc in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
-
-class Package:
-    def __str__(self):
-        return '%s-%s.%s' % (self.name, self.ver, self.arch)
 
 from time import time
 _curr = None
@@ -260,39 +256,25 @@ class Repo:
     def __len__(self):
         return len(self.packages)
 
-    def __getitem__(self, n):
-        pkg = self.packages[n]
-        arch, loc, summ, desc = pkg.load(0, '', '', '')
-        def dec((name, f)):
-            if f: f = f[0], self.versions[f[1]]
-            return self.provides[name][0], f
-        prco = tuple(map(dec, pkg.load([(0, (0, 0))])[0]) for i in range(5))
-        ret = Package()
-        ret.arch = self.arches[arch]
-        ret.name, (eq, ret.ver) = prco[0][0]
-        ret.summ = summ
-        ret.desc = desc
-        return ret
-
 class Sack(set):
     def search(self, patterns):
-        patterns = [p[-1:] == '*' and (p[:-1], False) or (p, True)
-                    for p in patterns]
         for repo in self:
-            keys = set()
             prov = repo.provides
-            for pat, exact in patterns:
-                tm()
+            for pat in patterns:
+                exact = True
+                if pat[-1:] == '*':
+                    pat = pat[:-1]
+                    exact = False
                 i = prov.find(pat)
                 while i < len(prov):
-                    p, k = prov[i]
-                    if not p.startswith(pat): break
-                    if exact and len(p) != len(pat): break
-                    keys.update(k)
+                    name, keys = prov[i]
+                    if not name.startswith(pat): break
+                    if exact and len(name) != len(pat): break
+                    for k in keys:
+                        pkg = repo.packages[k]
+                        arch, x, n, (x, v) = pkg.load(0, 0, 0, (0, 0))
+                        if n == i: yield name, repo.versions[v], repo.arches[arch]
                     i += 1
-                tm('"%s%s" in %s => %d', pat, '*'[exact:], repo, len(keys))
-            for k in keys:
-                yield repo[k]
 
 if __name__ == '__main__':
     sack = Sack()
@@ -303,5 +285,5 @@ if __name__ == '__main__':
                 sync(fn, d)
             dump(fn +'.db', parse(fn +'.xml'))
         sack.add(Repo(n, fn +'.db'))
-    for po in sack.search(sys.argv[1:]):
-        print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
+    for pkg in sack.search(sys.argv[1:]):
+        print '%s-%s.%s' % pkg
