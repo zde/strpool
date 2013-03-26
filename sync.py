@@ -280,15 +280,21 @@ class Sack(set):
             keys = set()
             prov = repo.provides
             for pat in patterns:
-                tm()
-                i = prov.find(pat)
-                while i < len(prov):
-                    p, k = prov[i]
-                    if not p.startswith(pat):
-                        break
-                    keys.update(k)
-                    i += 1
-                tm('search %s in %s => %d', pat, repo, len(keys))
+                if pat[-1:] == '*':
+                    pat = pat[:-1]
+                    i = prov.find(pat)
+                    while i < len(prov):
+                        p, k = prov[i]
+                        if not p.startswith(pat):
+                            break
+                        keys.update(k)
+                        i += 1
+                else:
+                    i = prov.find(pat)
+                    if i < len(prov):
+                        p, k = prov[i]
+                        if str(p) == pat:
+                            keys.update(k)
             for k in keys:
                 yield repo[k]
 
