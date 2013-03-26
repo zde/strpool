@@ -245,9 +245,8 @@ class Repo:
         db = strpool.chunk(strpool.mmap(open(fn)))
         if db.load_raw(4) != 'PKGS':
             raise IOError, 'Repository signature not found'
-        tm('db open')
         self.arches   = db.load_pool()
-        tm('%d arches', len(self.arches))
+        tm('open %s', fn)
         self.provides = db.load_pool(1)
         tm('%d provides', len(self.provides))
         self.versions = db.load_pool()
@@ -272,9 +271,9 @@ class Repo:
 
 class Sack(dict):
     def search(self, name):
-        tm()
         pkgs = []
         for repo in self:
+            tm()
             prov = self[repo].provides
             keys = set()
             i = prov.find(name)
@@ -284,6 +283,7 @@ class Sack(dict):
                 keys.update(k); i += 1
             tm('search %s in %s => %d keys', name, repo, len(keys))
             pkgs.extend(map(self[repo].__getitem__, keys))
+            tm('convert to po')
         return pkgs
 
 if __name__ == '__main__':
