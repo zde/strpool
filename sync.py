@@ -240,7 +240,8 @@ def tm(title=None, *args):
     _curr = time()
 
 class Repo:
-    def __init__(self, fn):
+    def __init__(self, name, fn):
+        self.name = name
         tm()
         db = strpool.chunk(strpool.mmap(open(fn)))
         if db.load_raw(4) != 'PKGS':
@@ -254,6 +255,8 @@ class Repo:
         self.packages = db.load_pool()
         tm('%d packages', len(self.packages))
 
+    def __str__(self):
+        return self.name
     def __len__(self):
         return len(self.packages)
 
@@ -271,27 +274,23 @@ class Repo:
         ret.desc = desc
         return ret
 
-    def search(self, prefix):
-        tm()
-        keys = set()
-        prov = self.provides
-        i = prov.find(prefix)
-        while i < len(prov):
-            p, k = prov[i]
-            if not p.startswith(prefix):
-                break
-            keys.update(k)
-            i += 1
-        tm('prefix %s => %d hits', prefix, len(keys))
-        po = map(self.__getitem__, keys)
-        tm('convert to po')
-        return po
-
-class Sack(dict):
-    def search(self, *args, **kwargs):
+class Sack(set):
+    def search(self, patterns):
         for repo in self:
-            for po in self[repo].search(*args, **kwargs):
-                yield po
+            keys = set()
+            prov = repo.provides
+            for pat in patterns:
+                tm()
+                i = prov.find(pat)
+                while i < len(prov):
+                    p, k = prov[i]
+                    if not p.startswith(pat):
+                        break
+                    keys.update(k)
+                    i += 1
+                tm('search %s in %s => %d', pat, repo, len(keys))
+            for k in keys:
+                yield repo[k]
 
 if __name__ == '__main__':
     sack = Sack()
@@ -301,6 +300,6 @@ if __name__ == '__main__':
             if not os.access(fn +'.xml', os.R_OK):
                 sync(fn, d)
             dump(fn +'.db', parse(fn +'.xml'))
-        sack[n] = Repo(fn +'.db')
-    for po in sack.search(sys.argv[1]):
+        sack.add(Repo(n, fn +'.db'))
+    for po in sack.search(sys.argv[1:]):
         print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
