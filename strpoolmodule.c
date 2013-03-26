@@ -441,11 +441,14 @@ chunk_load(struct chunk *self, PyObject *arg)
             if (!item) goto err;
         } else
         if (PyString_CheckExact(item)) {
+            struct chunk *chunk = PyObject_NEW(struct chunk, self->ob_type);
+            if (!chunk) goto err;
             for (s = c = *buf++; c & 0x80; s += c = *buf++)
                 s = s - 0x7f << 7;
-            item = PyString_FromStringAndSize(buf, s);
-            if (!item) goto err;
-            buf += s;
+            chunk->buf = buf; buf += s;
+            chunk->size = s;
+            chunk->base = (PyObject*)self; Py_INCREF(self);
+            item = (PyObject*)chunk;
         } else
         if (PyList_CheckExact(item) && Py_SIZE(item) == 1) {
             PyObject *arg = PyList_GET_ITEM(item, 0);
