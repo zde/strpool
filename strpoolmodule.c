@@ -536,7 +536,7 @@ chunk_startswith(struct chunk *self, PyObject *arg)
 static struct pool* chunk_load_pool();
 static PyMethodDef chunk_methods[] = {
 { "load", (PyCFunction)chunk_load, METH_VARARGS, },
-{ "load_pool", (PyCFunction)chunk_load_pool, METH_NOARGS, },
+{ "load_pool", (PyCFunction)chunk_load_pool, METH_VARARGS, },
 { "load_raw", (PyCFunction)chunk_load_raw, METH_O, },
 { "startswith", (PyCFunction)chunk_startswith, METH_O, },
 { NULL, NULL }};
@@ -561,7 +561,7 @@ struct pool {
     PyObject_VAR_HEAD
     PyObject *base;
     const uint8_t *buf;
-    size_t *hash, item[1];
+    size_t *hash, flags, item[1];
 };
 
 static void
@@ -578,23 +578,46 @@ pool_length(struct pool *self)
     return Py_SIZE(self);
 }
 
-static struct chunk*
+static PyObject*
 pool_item(struct pool *self, Py_ssize_t i)
 {
     struct chunk *chunk;
 
-    if (i < 0 || i >= Py_SIZE(self)) goto err_index;
+    if (i < 0 || i >= Py_SIZE(self))
+        return PyErr_SetString(PyExc_IndexError, "invalid"), NULL;
     chunk = PyObject_NEW(struct chunk, &chunk_type);
-    if (!chunk) goto err;
+    if (!chunk) return NULL;
     chunk->buf = self->buf + self->item[i];
     chunk->size = self->item[i + 1] - self->item[i];
     chunk->base = (PyObject*)self; Py_INCREF(self);
-    return chunk;
+    if (self->flags & 1) {
+        PyObject *tuple, *list;
+        const uint8_t *buf = memchr(chunk->buf, 0, chunk->size);
 
- err_index:
-    PyErr_SetString(PyExc_IndexError, "invalid");
- err:
-    return NULL;
+        if (!(tuple = PyTuple_New(2))) goto err_del;
+        if (!(list = PyList_New(0))) goto err_del2;
+        PyTuple_SET_ITEM(tuple, 0, (PyObject*)chunk);
+        PyTuple_SET_ITEM(tuple, 1, (PyObject*)list);
+        if (buf) {
+            const uint8_t *end = chunk->buf + chunk->size;
+
+            chunk->size = buf++ - chunk->buf;
+            do {
+                size_t s, c;
+                for (s = c = *buf++; c & 0x80; s += c = *buf++)
+                    s = s - 0x7f << 7;
+                PyList_Append(list, PyInt_FromLong(s));
+            } while (buf < end);
+        }
+        return tuple;
+
+     err_del2:
+        PyObject_DEL(tuple);
+     err_del:
+        PyObject_DEL(chunk);
+        return NULL;
+    }
+    return (PyObject*)chunk;
 }
 
 static PySequenceMethods pool_as_sequence = {
@@ -689,7 +712,7 @@ static PyTypeObject pool_type = {
 /* read pool from chunk */
 
 static struct pool*
-chunk_load_pool(struct chunk *self)
+chunk_load_pool(struct chunk *self, PyObject *args)
 {
     const uint8_t *buf = self->buf;
     const uint8_t *end = buf + self->size;
@@ -700,6 +723,8 @@ chunk_load_pool(struct chunk *self)
         s = s - 0x7f << 7;
     pool = PyObject_NEW_VAR(struct pool, &pool_type, s);
     if (!pool) goto err;
+    pool->flags = 0;
+    if (!PyArg_ParseTuple(args, "|I:flags", &pool->flags)) goto err_del;
     for (i = sum = 0; pool->item[i] = sum, i < Py_SIZE(pool); i++, sum += s)
         for (s = c = *buf++; c & 0x80; s += c = *buf++)
             s = s - 0x7f << 7;
@@ -714,8 +739,9 @@ chunk_load_pool(struct chunk *self)
     return pool;
 
  err_size:
-    PyObject_DEL(pool);
     PyErr_SetString(PyExc_ValueError, "short buffer");
+ err_del:
+    PyObject_DEL(pool);
  err:
     return NULL;
 }

@@ -225,18 +225,7 @@ class Cache(dict):
     def __getitem__(self, n):
         ret = self.get(n)
         if ret is None:
-            ret = self.pool[n]
-            if self.keys:
-                name = ''
-                while ret:
-                    c = ret.load_raw(1)
-                    if c == '\0': break
-                    name += c
-                keys = []
-                while ret:
-                    keys.append(ret.load(0)[0])
-                ret = name, keys
-            self[n] = ret
+            ret = self[n] = self.pool[n]
         return ret
 
 class Package:
@@ -259,7 +248,7 @@ class Repo:
         assert db.load_raw(4) == 'PKGS'
         self.arches   = db.load_pool()
         tm('prov')
-        self.provides = Cache(db.load_pool(), keys=True)
+        self.provides = db.load_pool(1)
         tm('ver')
         self.versions = db.load_pool()
         tm('pkgs')
@@ -283,8 +272,8 @@ class Repo:
     def search(self, name):
         tm('search')
         dup = set()
-        i = self.provides.pool.find(name)
-        while i < len(self.provides.pool):
+        i = self.provides.find(name)
+        while i < len(self.provides):
             prov, keys = self.provides[i]; i += 1
             if not prov.startswith(name):
                 break
