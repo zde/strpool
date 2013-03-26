@@ -520,11 +520,25 @@ chunk_load_raw(struct chunk *self, PyObject *arg)
     return NULL;
 }
 
+static PyObject*
+chunk_startswith(struct chunk *self, PyObject *arg)
+{
+    const void *buf;
+    size_t size;
+
+    if (PyObject_AsReadBuffer(arg, &buf, &size))
+        return NULL;
+    if (self->size >= size && !memcmp(self->buf, buf, size))
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
 static struct pool* chunk_load_pool();
 static PyMethodDef chunk_methods[] = {
 { "load", (PyCFunction)chunk_load, METH_VARARGS, },
 { "load_pool", (PyCFunction)chunk_load_pool, METH_NOARGS, },
 { "load_raw", (PyCFunction)chunk_load_raw, METH_O, },
+{ "startswith", (PyCFunction)chunk_startswith, METH_O, },
 { NULL, NULL }};
 
 static PyTypeObject chunk_type = {

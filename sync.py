@@ -263,7 +263,7 @@ class Repo:
         i = self.provides.find(name)
         while i < len(self.provides):
             prov = self.provides[i]
-            if not str(prov).startswith(name):
+            if not prov.startswith(name):
                 break
             lst = self.index[i]; i += 1
             while lst:
