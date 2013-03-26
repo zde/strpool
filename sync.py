@@ -260,6 +260,7 @@ class Sack(set):
     def search(self, patterns):
         for repo in self:
             prov = repo.provides
+            done = set()
             for pat in patterns:
                 exact = True
                 if pat[-1:] == '*':
@@ -271,9 +272,12 @@ class Sack(set):
                     if not name.startswith(pat): break
                     if exact and len(name) != len(pat): break
                     for k in keys:
+                        if k in done: continue
                         pkg = repo.packages[k]
                         arch, x, n, (x, v) = pkg.load(0, 0, 0, (0, 0))
-                        if n == i: yield name, repo.versions[v], repo.arches[arch]
+                        if n == i:
+                            done.add(k)
+                            yield repo, name, repo.versions[v], repo.arches[arch]
                     i += 1
 
 if __name__ == '__main__':
@@ -286,4 +290,4 @@ if __name__ == '__main__':
             dump(fn +'.db', parse(fn +'.xml'))
         sack.add(Repo(n, fn +'.db'))
     for pkg in sack.search(sys.argv[1:]):
-        print '%s-%s.%s' % pkg
+        print '%s: %s-%s.%s' % pkg
