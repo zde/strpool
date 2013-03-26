@@ -218,42 +218,35 @@ def dump(fn, (arches, provides, versions, packages)):
     buf.dump_pool(packages)
     write(buf)
 
-class Cache(dict):
-    def __init__(self, pool, keys=False):
-        self.pool = pool
-        self.keys = keys
-    def __getitem__(self, n):
-        ret = self.get(n)
-        if ret is None:
-            ret = self[n] = self.pool[n]
-        return ret
-
 class Package:
     def __str__(self):
         return '%s-%s.%s' % (self.name, self.ver, self.arch)
 
 from time import time
-_curr_tm = None, None
+_curr = None
 
-def tm(x=None):
-    global _curr_tm
-    if _curr_tm[0]:
-        elapsed = time() - _curr_tm[1]
-        sys.stderr.write('%4.2f %s\n' % (elapsed * 1e3, _curr_tm[0]))
-    _curr_tm = x, time()
+def tm(title=None, *args):
+    global _curr
+    if title:
+        elapsed = time() - _curr
+        sys.stderr.write('%6.3fms %s\n' % (elapsed * 1e3, title % args))
+    _curr = time()
 
 class Repo:
     def __init__(self, fn):
-        db = strpool.chunk(strpool.mmap(open(fn)))
-        assert db.load_raw(4) == 'PKGS'
-        self.arches   = db.load_pool()
-        tm('prov')
-        self.provides = db.load_pool(1)
-        tm('ver')
-        self.versions = db.load_pool()
-        tm('pkgs')
-        self.packages = db.load_pool()
         tm()
+        db = strpool.chunk(strpool.mmap(open(fn)))
+        if db.load_raw(4) != 'PKGS':
+            raise IOError, 'Repository signature not found'
+        tm('db open')
+        self.arches   = db.load_pool()
+        tm('%d arches', len(self.arches))
+        self.provides = db.load_pool(1)
+        tm('%d provides', len(self.provides))
+        self.versions = db.load_pool()
+        tm('%d versions', len(self.versions))
+        self.packages = db.load_pool()
+        tm('%d packages', len(self.packages))
     def __len__(self):
         return len(self.packages)
     def __getitem__(self, n):
@@ -270,7 +263,7 @@ class Repo:
         ret.desc = desc
         return ret
     def search(self, name):
-        tm('search')
+        tm()
         dup = set()
         i = self.provides.find(name)
         while i < len(self.provides):
@@ -278,12 +271,10 @@ class Repo:
             if not prov.startswith(name):
                 break
             for n in keys:
-                if n not in dup:
-                    dup.add(n)
-                    po = self[n]
-                    if po.name == prov:
-                        yield po
-        tm(None)
+                if n in dup: continue
+                dup.add(n)
+                yield self[n]
+        tm('search "%s*"', name)
 
 if __name__ == '__main__':
     for n, d in repos():
