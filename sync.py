@@ -276,25 +276,21 @@ class Repo:
 
 class Sack(set):
     def search(self, patterns):
+        patterns = [p[-1:] == '*' and (p[:-1], False) or (p, True)
+                    for p in patterns]
         for repo in self:
             keys = set()
             prov = repo.provides
-            for pat in patterns:
-                if pat[-1:] == '*':
-                    pat = pat[:-1]
-                    i = prov.find(pat)
-                    while i < len(prov):
-                        p, k = prov[i]
-                        if not p.startswith(pat):
-                            break
-                        keys.update(k)
-                        i += 1
-                else:
-                    i = prov.find(pat)
-                    if i < len(prov):
-                        p, k = prov[i]
-                        if str(p) == pat:
-                            keys.update(k)
+            for pat, exact in patterns:
+                tm()
+                i = prov.find(pat)
+                while i < len(prov):
+                    p, k = prov[i]
+                    if not p.startswith(pat): break
+                    if exact and len(p) != len(pat): break
+                    keys.update(k)
+                    i += 1
+                tm('"%s%s" in %s => %d', pat, '*'[exact:], repo, len(keys))
             for k in keys:
                 yield repo[k]
 
