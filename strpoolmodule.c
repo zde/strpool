@@ -654,16 +654,22 @@ pool_index(struct pool *self, PyObject *arg)
         if (!self->hash)
             return PyErr_NoMemory();
         for (i = Py_SIZE(self); i; --i) {
-            hash = _hash(self->buf + self->item[i - 1],
-                         self->item[i] - self->item[i - 1]) % tab;
+            const uint8_t *ibuf = self->buf + self->item[i - 1], *p;
+            size_t isize = self->item[i] - self->item[i - 1];
+            if ((self->flags & 1) && (p = memchr(ibuf, 0, isize)))
+                isize = p - ibuf;
+            hash = _hash(ibuf, isize) % tab;
             while (self->hash[hash %= tab]) hash++;
             self->hash[hash] = i;
         }
     }
-    for (hash = _hash(buf, size); i = self->hash[hash %= tab]; hash++)
-        if (self->item[i] - self->item[i - 1] == size &&
-            !memcmp(self->buf + self->item[i - 1], buf, size))
-            return PyInt_FromLong(i - 1);
+    for (hash = _hash(buf, size); i = self->hash[hash %= tab]; hash++) {
+        const uint8_t *ibuf = self->buf + self->item[i - 1];
+        size_t isize = self->item[i] - self->item[i - 1];
+        if (isize == size || (self->flags & 1) && isize > size && ibuf[size] == 0)
+            if (memcmp(ibuf, buf, size) == 0)
+                return PyInt_FromLong(i - 1);
+    }
     Py_RETURN_NONE;
 }
 
