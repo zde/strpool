@@ -225,7 +225,7 @@ def tm(x=None):
     global _curr_tm
     if _curr_tm[0]:
         elapsed = time() - _curr_tm[1]
-        sys.stderr.write('%4.1f %s\n' % (elapsed * 1e3, _curr_tm[0]))
+        sys.stderr.write('%4.2f %s\n' % (elapsed * 1e3, _curr_tm[0]))
     _curr_tm = x, time()
 
 class Repo:
@@ -285,4 +285,4 @@ if __name__ == '__main__':
             dump(fn +'.db', parse(fn +'.xml'))
         repo = Repo(fn +'.db')
         for po in repo.search(sys.argv[1]):
-            print po
+            print '%s-%s.%s %s' % (po.name, po.ver, po.arch, po.summ)
