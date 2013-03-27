@@ -670,7 +670,8 @@ pool_index(struct pool *self, PyObject *arg)
             if (memcmp(ibuf, buf, size) == 0)
                 return PyInt_FromLong(i - 1);
     }
-    Py_RETURN_NONE;
+    PyErr_SetString(PyExc_ValueError, "key not found");
+    return NULL;
 }
 
 static PyObject*

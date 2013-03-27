@@ -170,18 +170,22 @@ def parse(fn):
     packages = []
     for _, e in ET.iterparse(open(fn)):
         if e.tag != '{http://linux.duke.edu/metadata/common}package': continue
-        arch = arches(e.find('{http://linux.duke.edu/metadata/common}arch').text)
         name = e.find('{http://linux.duke.edu/metadata/common}name').text
         name = provides(name, len(packages))
-        ver = versions(evr(e.find('{http://linux.duke.edu/metadata/common}version').get))
+        ver = evr(e.find('{http://linux.duke.edu/metadata/common}version').get)
+        ver = versions(ver)
+        arch = e.find('{http://linux.duke.edu/metadata/common}arch').text
+        arch = arches(arch)
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
         summ = e.find('{http://linux.duke.edu/metadata/common}summary').text
         desc = e.find('{http://linux.duke.edu/metadata/common}description').text
         if type(summ) is unicode: summ = summ.encode('UTF-8')
         if type(desc) is unicode: desc = desc.encode('UTF-8')
-        fil = []; prco = [(name, (2, ver))], [], [], [], []; tgt = None
+        prco = [(name, (2, ver))], [], [], [], []; tgt = None
         for v in e.find('{http://linux.duke.edu/metadata/common}format').getiterator():
-            if v.tag == '{http://linux.duke.edu/metadata/common}file': fil.append(v.text)
+            if v.tag == '{http://linux.duke.edu/metadata/common}file':
+                v = provides(v.text, len(packages)), None
+                if not v in prco[0]: prco[0].append(v)
             elif v.tag == '{http://linux.duke.edu/metadata/rpm}provides': tgt = 0
             elif v.tag == '{http://linux.duke.edu/metadata/rpm}requires': tgt = 1
             elif v.tag == '{http://linux.duke.edu/metadata/rpm}conflicts': tgt = 3
@@ -200,8 +204,8 @@ def parse(fn):
                     f = f, versions(evr(get))
                 v = provides(get('name'), t == 0 and len(packages)), f
                 if v not in prco[t]: prco[t].append(v)
-        prco[0].extend([(provides(n), None) for n in fil])
-        packages.append((arch, prco, loc, summ, desc))
+        del prco[0][0]
+        packages.append((name, ver, arch, loc, summ, desc, prco))
         e.clear()
     return arches, provides, versions, packages
 
@@ -216,11 +220,10 @@ def dump(fn, (arches, provides, versions, packages)):
         buf.dump_pool(i.list())
         write(buf)
     # write packages
-    def enc((name, f)):
-        if f: f = f[0], versions[f[1]]
-        return provides[name], f
-    packages = [(arches[arch],) + tuple(map(enc, p) for p in prco) + (loc, summ, desc) 
-                for arch, prco, loc, summ, desc in packages]
+    packages = [
+        (provides[name], versions[ver], arches[arch], loc, summ, desc) +
+        tuple([(provides[n], f and (f[0], versions[f[1]])) for n, f in ps] for ps in prco)
+        for name, ver, arch, loc, summ, desc, prco in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
@@ -237,8 +240,8 @@ def tm(title=None, *args):
 
 class Repo:
     def __init__(self, name, fn):
-        self.name = name
         tm()
+        self.name = name
         db = strpool.chunk(strpool.mmap(open(fn)))
         if db.load_raw(4) != 'PKGS':
             raise IOError, 'Repository signature not found'
@@ -251,16 +254,14 @@ class Repo:
         self.packages = db.load_pool()
         tm('%d packages', len(self.packages))
 
-    def __str__(self):
-        return self.name
-    def __len__(self):
-        return len(self.packages)
+    def __str__(self): return self.name
+    def __len__(self): return len(self.packages)
 
 class Sack(set):
     def search(self, patterns):
         for repo in self:
             prov = repo.provides
-            done = set()
+            ret = set()
             for pat in patterns:
                 exact = True
                 if pat[-1:] == '*':
@@ -268,17 +269,15 @@ class Sack(set):
                     exact = False
                 i = prov.find(pat)
                 while i < len(prov):
-                    name, keys = prov[i]
+                    name, pkgs = prov[i]
                     if not name.startswith(pat): break
                     if exact and len(name) != len(pat): break
-                    for k in keys:
-                        if k in done: continue
-                        pkg = repo.packages[k]
-                        arch, x, n, (x, v) = pkg.load(0, 0, 0, (0, 0))
-                        if n == i:
-                            done.add(k)
-                            yield repo, name, repo.versions[v], repo.arches[arch]
+                    ret.update(pkgs)
                     i += 1
+            for k in ret:
+                pkg = repo.packages[k]
+                n, v, a = pkg.load(0, 0, 0)
+                yield prov[n][0], repo.versions[v], repo.arches[a]
 
 if __name__ == '__main__':
     sack = Sack()
@@ -290,4 +289,4 @@ if __name__ == '__main__':
             dump(fn +'.db', parse(fn +'.xml'))
         sack.add(Repo(n, fn +'.db'))
     for pkg in sack.search(sys.argv[1:]):
-        print '%s: %s-%s.%s' % pkg
+        print '%s-%s.%s' % pkg
