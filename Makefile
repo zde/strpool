@@ -1,4 +1,4 @@
-MODULES = strpoolmodule.so
+MODULES = strpool.so
 
 all: $(MODULES)
 	python sync.py "gnome-t*" yum
