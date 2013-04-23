@@ -641,6 +641,40 @@ _hash(const uint8_t *buf, size_t size)
 }
 
 static PyObject*
+pool_index(struct pool *self, PyObject *arg)
+{
+    const uint8_t *buf;
+    size_t size, tab = Py_SIZE(self)*2 + 1;
+    unsigned i, hash;
+
+    if (PyObject_AsReadBuffer(arg, (const void**)&buf, &size))
+        return NULL;
+    if (!self->hash) {
+        self->hash = calloc(tab, sizeof(size_t));
+        if (!self->hash)
+            return PyErr_NoMemory();
+        for (i = Py_SIZE(self); i; --i) {
+            const uint8_t *ibuf = self->buf + self->item[i - 1], *p;
+            size_t isize = self->item[i] - self->item[i - 1];
+            if ((self->flags & 1) && (p = memchr(ibuf, 0, isize)))
+                isize = p - ibuf;
+            hash = _hash(ibuf, isize) % tab;
+            while (self->hash[hash %= tab]) hash++;
+            self->hash[hash] = i;
+        }
+    }
+    for (hash = _hash(buf, size); i = self->hash[hash %= tab]; hash++) {
+        const uint8_t *ibuf = self->buf + self->item[i - 1];
+        size_t isize = self->item[i] - self->item[i - 1];
+        if (isize == size || (self->flags & 1) && isize > size && ibuf[size] == 0)
+            if (memcmp(ibuf, buf, size) == 0)
+                return PyInt_FromLong(i - 1);
+    }
+    PyErr_SetString(PyExc_ValueError, "key not found");
+    return NULL;
+}
+
+static PyObject*
 pool_find(struct pool *self, PyObject *arg)
 {
     const uint8_t *buf;
@@ -667,6 +701,7 @@ pool_find(struct pool *self, PyObject *arg)
 }
 
 static PyMethodDef pool_methods[] = {
+{ "index", (PyCFunction)pool_index, METH_O, },
 { "find", (PyCFunction)pool_find, METH_O, },
 { NULL, NULL }};
 
