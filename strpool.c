@@ -532,7 +532,7 @@ chunk_load_cstr(struct chunk *self)
         ret->base = (PyObject*)self; Py_INCREF(self);
         self->buf = ++buf;
         self->size -= buf - ret->buf;
-        return ret;
+        return (PyObject*)ret;
     }
     Py_RETURN_NONE;
 }
