@@ -1,7 +1,7 @@
 MODULES = strpool.so
 
 all: $(MODULES)
-	python sync.py provides "gnome-t*" yum
+	./mgmt search "gnome-t*"
 
 .SUFFIXES: .so
 .c.so:
