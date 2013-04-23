@@ -521,6 +521,23 @@ chunk_load_raw(struct chunk *self, PyObject *arg)
 }
 
 static PyObject*
+chunk_load_cstr(struct chunk *self)
+{
+    const uint8_t *buf = memchr(self->buf, 0, self->size);
+    if (buf) {
+        struct chunk *ret = PyObject_NEW(struct chunk, Py_TYPE(self));
+        if (!ret) return NULL;
+        ret->buf = self->buf;
+        ret->size = buf - self->buf;
+        ret->base = (PyObject*)self; Py_INCREF(self);
+        self->buf = ++buf;
+        self->size -= buf - ret->buf;
+        return ret;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject*
 chunk_startswith(struct chunk *self, PyObject *arg)
 {
     const void *buf;
@@ -538,6 +555,7 @@ static PyMethodDef chunk_methods[] = {
 { "load", (PyCFunction)chunk_load, METH_VARARGS, },
 { "load_pool", (PyCFunction)chunk_load_pool, METH_VARARGS, },
 { "load_raw", (PyCFunction)chunk_load_raw, METH_O, },
+{ "load_cstr", (PyCFunction)chunk_load_cstr, METH_NOARGS, },
 { "startswith", (PyCFunction)chunk_startswith, METH_O, },
 { NULL, NULL }};
 

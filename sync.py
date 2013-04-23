@@ -247,7 +247,7 @@ class Repo:
             raise IOError, 'Repository signature not found'
         self.arches   = db.load_pool()
         tm('open %s', fn)
-        self.provides = db.load_pool(1)
+        self.provides = db.load_pool()
         tm('%d provides', len(self.provides))
         self.versions = db.load_pool()
         tm('%d versions', len(self.versions))
@@ -257,27 +257,36 @@ class Repo:
     def __str__(self): return self.name
     def __len__(self): return len(self.packages)
 
+    def __getitem__(self, pkg):
+        n, v, a = self.packages[pkg].load(0, 0, 0)
+        return '%s-%s.%s' % (
+            self.provides[n].load_cstr(),
+            self.versions[v],
+            self.arches[a],
+        )
+
+    def search(self, patterns, prov):
+        pkgs = set()
+        for pat in patterns:
+            if pat[-1:] == '*': pat = pat[:-1]
+            else: pat += '\0'
+            i = self.provides.find(pat)
+            while i < len(self.provides):
+                p = self.provides[i]
+                if not p.startswith(pat): break
+                name = p.load_cstr()
+                if name:
+                    while p:
+                        pkg, = p.load(0)
+                        if prov or self.packages[pkg].load(0)[0] == i:
+                            pkgs.add(pkg)
+                i += 1
+        return pkgs
+
 class Sack(set):
-    def search(self, patterns):
+    def search(self, patterns, prov):
         for repo in self:
-            prov = repo.provides
-            ret = set()
-            for pat in patterns:
-                exact = True
-                if pat[-1:] == '*':
-                    pat = pat[:-1]
-                    exact = False
-                i = prov.find(pat)
-                while i < len(prov):
-                    name, pkgs = prov[i]
-                    if not name.startswith(pat): break
-                    if exact and len(name) != len(pat): break
-                    ret.update(pkgs)
-                    i += 1
-            for k in ret:
-                pkg = repo.packages[k]
-                n, v, a = pkg.load(0, 0, 0)
-                yield prov[n][0], repo.versions[v], repo.arches[a]
+            yield repo, repo.search(patterns, prov)
 
 if __name__ == '__main__':
     sack = Sack()
@@ -288,5 +297,10 @@ if __name__ == '__main__':
                 sync(fn, d)
             dump(fn +'.db', parse(fn +'.xml'))
         sack.add(Repo(n, fn +'.db'))
-    for pkg in sack.search(sys.argv[1:]):
-        print '%s-%s.%s' % pkg
+    # parse args
+    cmd, arg = sys.argv[1], sys.argv[2:]
+    if cmd in ('search', 'provides'):
+        for repo, pkgs in sack.search(arg, cmd == 'provides'):
+            print '[%s]' % repo
+            for pkg in pkgs:
+                print repo[pkg]
