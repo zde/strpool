@@ -290,6 +290,18 @@ class Sack(set):
         for repo in self:
             yield repo, repo.search(patterns, is_pkg)
 
+def installed():
+    import rpm
+    ts = rpm.TransactionSet()
+    for h in ts.dbMatch():
+        n = h['name']
+        if n == 'gpg-pubkey': continue
+        v = h['version']
+        e = h['epoch']
+        if e: v = '%d:%s' % (e, v)
+        yield '%s-%s-%s.%s' % (n, v, h['release'], h['arch'])
+    ts.closeDB()
+
 if __name__ == '__main__':
     sack = Sack()
     for n, d in repos():
@@ -305,3 +317,6 @@ if __name__ == '__main__':
         for repo, pkgs in sack.search(arg, cmd == 'search'):
             for pkg in pkgs:
                 print repo, repo[pkg]
+    elif cmd == 'installed':
+        for pkg in installed():
+            print pkg
