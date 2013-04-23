@@ -553,7 +553,7 @@ chunk_startswith(struct chunk *self, PyObject *arg)
 static struct pool* chunk_load_pool();
 static PyMethodDef chunk_methods[] = {
 { "load", (PyCFunction)chunk_load, METH_VARARGS, },
-{ "load_pool", (PyCFunction)chunk_load_pool, METH_VARARGS, },
+{ "load_pool", (PyCFunction)chunk_load_pool, METH_NOARGS, },
 { "load_raw", (PyCFunction)chunk_load_raw, METH_O, },
 { "load_cstr", (PyCFunction)chunk_load_cstr, METH_NOARGS, },
 { "startswith", (PyCFunction)chunk_startswith, METH_O, },
@@ -670,7 +670,7 @@ static PyTypeObject pool_type = {
 /* read pool from chunk */
 
 static struct pool*
-chunk_load_pool(struct chunk *self, PyObject *args)
+chunk_load_pool(struct chunk *self)
 {
     const uint8_t *buf = self->buf;
     const uint8_t *end = buf + self->size;
