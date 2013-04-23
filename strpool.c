@@ -561,13 +561,12 @@ struct pool {
     PyObject_VAR_HEAD
     PyObject *base;
     const uint8_t *buf;
-    size_t *hash, flags, item[1];
+    size_t item[1];
 };
 
 static void
 pool_dealloc(struct pool *self)
 {
-    if (self->hash) free(self->hash);
     Py_DECREF(self->base);
     PyObject_DEL(self);
 }
@@ -590,33 +589,6 @@ pool_item(struct pool *self, Py_ssize_t i)
     chunk->buf = self->buf + self->item[i];
     chunk->size = self->item[i + 1] - self->item[i];
     chunk->base = (PyObject*)self; Py_INCREF(self);
-    if (self->flags & 1) {
-        PyObject *tuple, *list;
-        const uint8_t *buf = memchr(chunk->buf, 0, chunk->size);
-
-        if (!(tuple = PyTuple_New(2))) goto err_del;
-        if (!(list = PyList_New(0))) goto err_del2;
-        PyTuple_SET_ITEM(tuple, 0, (PyObject*)chunk);
-        PyTuple_SET_ITEM(tuple, 1, (PyObject*)list);
-        if (buf) {
-            const uint8_t *end = chunk->buf + chunk->size;
-
-            chunk->size = buf++ - chunk->buf;
-            do {
-                size_t s, c;
-                for (s = c = *buf++; c & 0x80; s += c = *buf++)
-                    s = s - 0x7f << 7;
-                PyList_Append(list, PyInt_FromLong(s));
-            } while (buf < end);
-        }
-        return tuple;
-
-     err_del2:
-        PyObject_DEL(tuple);
-     err_del:
-        PyObject_DEL(chunk);
-        return NULL;
-    }
     return (PyObject*)chunk;
 }
 
@@ -626,53 +598,6 @@ static PySequenceMethods pool_as_sequence = {
 };
 
 /* pool methods */
-
-static unsigned
-_hash(const uint8_t *buf, size_t size)
-{
-    unsigned hash;
-    if (size > sizeof(unsigned))
-        hash = ((unsigned*)buf)[0], hash *= 33,
-        hash ^= ((unsigned*)(buf + size))[-1];
-    else
-        for (hash = 0; size--; hash *= 33)
-            hash ^= buf[size];
-    return hash;
-}
-
-static PyObject*
-pool_index(struct pool *self, PyObject *arg)
-{
-    const uint8_t *buf;
-    size_t size, tab = Py_SIZE(self)*2 + 1;
-    unsigned i, hash;
-
-    if (PyObject_AsReadBuffer(arg, (const void**)&buf, &size))
-        return NULL;
-    if (!self->hash) {
-        self->hash = calloc(tab, sizeof(size_t));
-        if (!self->hash)
-            return PyErr_NoMemory();
-        for (i = Py_SIZE(self); i; --i) {
-            const uint8_t *ibuf = self->buf + self->item[i - 1], *p;
-            size_t isize = self->item[i] - self->item[i - 1];
-            if ((self->flags & 1) && (p = memchr(ibuf, 0, isize)))
-                isize = p - ibuf;
-            hash = _hash(ibuf, isize) % tab;
-            while (self->hash[hash %= tab]) hash++;
-            self->hash[hash] = i;
-        }
-    }
-    for (hash = _hash(buf, size); i = self->hash[hash %= tab]; hash++) {
-        const uint8_t *ibuf = self->buf + self->item[i - 1];
-        size_t isize = self->item[i] - self->item[i - 1];
-        if (isize == size || (self->flags & 1) && isize > size && ibuf[size] == 0)
-            if (memcmp(ibuf, buf, size) == 0)
-                return PyInt_FromLong(i - 1);
-    }
-    PyErr_SetString(PyExc_ValueError, "key not found");
-    return NULL;
-}
 
 static PyObject*
 pool_find(struct pool *self, PyObject *arg)
@@ -701,15 +626,14 @@ pool_find(struct pool *self, PyObject *arg)
 }
 
 static PyMethodDef pool_methods[] = {
-{ "index", (PyCFunction)pool_index, METH_O, },
 { "find", (PyCFunction)pool_find, METH_O, },
 { NULL, NULL }};
 
 static PyObject*
 pool_repr(struct pool *self)
 {
-    PyObject *ret = PyString_FromFormat("<%s %p len %d flags %d>",
-        Py_TYPE(self)->tp_name, self->buf, Py_SIZE(self), self->flags);
+    PyObject *ret = PyString_FromFormat("<%s %p len %d>",
+        Py_TYPE(self)->tp_name, self->buf, Py_SIZE(self));
     return ret;
 }
 
@@ -739,8 +663,6 @@ chunk_load_pool(struct chunk *self, PyObject *args)
         s = s - 0x7f << 7;
     pool = PyObject_NEW_VAR(struct pool, &pool_type, s);
     if (!pool) goto err;
-    pool->flags = 0;
-    if (!PyArg_ParseTuple(args, "|I:flags", &pool->flags)) goto err_del;
     for (i = sum = 0; pool->item[i] = sum, i < Py_SIZE(pool); i++, sum += s)
         for (s = c = *buf++; c & 0x80; s += c = *buf++)
             s = s - 0x7f << 7;
@@ -751,7 +673,6 @@ chunk_load_pool(struct chunk *self, PyObject *args)
     self->buf = buf;
     self->size = end - buf;
     pool->base = (PyObject*)self; Py_INCREF(self);
-    pool->hash = NULL;
     return pool;
 
  err_size:
