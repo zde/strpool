@@ -294,12 +294,11 @@ def installed():
     import rpm
     ts = rpm.TransactionSet()
     for h in ts.dbMatch():
-        n = h['name']
-        if n == 'gpg-pubkey': continue
-        v = h['version']
-        e = h['epoch']
+        v = h[1001]
+        e = h[1003]
         if e: v = '%d:%s' % (e, v)
-        yield '%s-%s-%s.%s' % (n, v, h['release'], h['arch'])
+        nevra = '%s-%s-%s.%s' % (h[1000], v, h[1002], h[1022])
+        yield nevra
     ts.closeDB()
 
 if __name__ == '__main__':
