@@ -290,17 +290,6 @@ class Sack(set):
         for repo in self:
             yield repo, repo.search(patterns, is_pkg)
 
-def installed():
-    import rpm
-    ts = rpm.TransactionSet()
-    for h in ts.dbMatch():
-        v = h[1001]
-        e = h[1003]
-        if e: v = '%d:%s' % (e, v)
-        nevra = '%s-%s-%s.%s' % (h[1000], v, h[1002], h[1022])
-        yield nevra
-    ts.closeDB()
-
 if __name__ == '__main__':
     sack = Sack()
     for n, d in repos():
@@ -317,5 +306,6 @@ if __name__ == '__main__':
             for pkg in pkgs:
                 print repo, repo[pkg]
     elif cmd == 'installed':
-        for pkg in installed():
+        import rpmlib
+        for pkg in rpmlib.installed():
             print pkg
