@@ -4,7 +4,7 @@ import xml.etree.cElementTree as ET
 
 # configuration
 var = {
-    'releasever': '17',
+    'releasever': '19',
     'basearch': 'x86_64',
 }
 
@@ -228,6 +228,7 @@ def dump(fn, (arches, provides, versions, packages)):
         tuple([(provides[n], f and (f[0], versions[f[1]])) for n, f in ps] for ps in prco)
         for name, ver, arch, loc, summ, desc, prco in packages]
     buf = strpool.buf()
+    print fn
     buf.dump_pool(packages)
     write(buf)
 
@@ -262,11 +263,12 @@ class Repo:
     def __len__(self): return len(self.packages)
 
     def __getitem__(self, pkg):
-        n, v, a = self.packages[pkg].load(0, 0, 0)
-        return '%s-%s.%s' % (
+        n, v, a, l = self.packages[pkg].load(0, 0, 0, '')
+        return '%s-%s.%s %s' % (
             self.provides[n].load_cstr(),
             self.versions[v],
             self.arches[a],
+            l
         )
 
     def search(self, patterns, is_pkg):

@@ -3,47 +3,62 @@ import bsddb
 from struct import unpack
 
 class Package(object):
-    __slots__ = 'name version arch provides requires'.split()
-    use = set((
-        1000, 1001, 1002, 1003, 1022, # nvrea
-        1047, 1112, 1113, # provides
-        1049, 1048, 1050, # requires
-    ))
-
     def __init__(self, hdr, i=0):
+        tags = {}
         n, s = unpack('>2I', hdr[i:i + 8])
-        i += 8; b = i + n*16
-        d = {}
-        print 'NEW'
-        prev = 0
+        i += 8
         while n:
-            tag, t, o, c = unpack('>4I', hdr[i:i + 16])
+            tag, typ, offset, count = unpack('>4I', hdr[i:i + 16])
+            tags[tag] = typ, offset, count
             i += 16; n -= 1
-            print 'TAG', tag
-            assert tag > prev, (prev, tag); prev = tag
-            if tag not in self.use:
-                continue
-            o += b
-            v = []
-            while c:
-                if t == 6 or t == 8:
-                    p = hdr.index('\0', o)
-                    v.append(hdr[o:p])
-                    o = p + 1
-                elif t == 4:
-                    v.append(unpack('>I', hdr[o:o + 4])[0])
-                    o += 4
-                else: raise ValueError, (tag, t)
-                c -= 1
-            d[tag] = v
+        if i + s > len(hdr):
+            raise ValueError
+        self.tags = tags
+        self.hdr = hdr
+        self.base = i
+ 
+    def _tag(self, tag):
+        try: typ, offset, count = self.tags[tag]
+        except KeyError: return
+        hdr = self.hdr; offset += self.base
+        while count:
+            if typ == 6 or typ == 8:
+                p = hdr.index('\0', offset)
+                yield hdr[offset:p]
+                offset = p + 1
+            elif typ == 4:
+                p = offset + 4
+                yield unpack('>I', hdr[offset:p])[0]
+                offset = p
+            else:
+                raise ValueError
+            count -= 1
 
-        # nevra
-        self.name = d[1000][0]
-        epoch = d.get(1003, (None,))[0]
-        epoch = epoch and '%d:' % epoch or ''
-        self.version = '%s%s-%s' % (epoch, d[1001][0], d[1002][0])
-        self.arch  = d.get(1022, (None,))[0]
+    def __str__(self):
+        name, = self._tag(1000)
+        version, = self._tag(1001)
+        release, = self._tag(1002)
+        try: epoch = '%d:' % tuple(self._tag(1003))
+        except: epoch = ''
+        try: arch = '.%s' % tuple(self._tag(1022))
+        except: arch = ''
+        return '%s-%s%s-%s%s' % (name, epoch, version, release, arch)
 
+    def _prco(self, *arg):
+        name, flag, ver = map(self._tag, arg)
+        while True:
+            n = name.next()
+            f = flag.next()
+            v = ver.next()
+            f = (None, 1, 4, 5, 2, 3, 6, None)[f >> 1 & 7]
+            if f: f = f, v
+            yield n, f
+
+    provides = property(lambda self: self._prco(1047, 1112, 1113))
+    requires = property(lambda self: self._prco(1049, 1048, 1050))
+
+
+    if 0:
         # prco
         xlat = None, 1, 4, 5, 2, 3, 6, None
         def decode(flag, version):
@@ -55,11 +70,6 @@ class Package(object):
                     for name, flag, version in zip(*[d.get(t, ()) for t in tags])]
         self.provides = prco(1047, 1112, 1113)
         self.requires = prco(1049, 1048, 1050)
-
-    def __str__(self):
-        if not self.arch:
-            return '%s-%s' % (self.name, self.version)
-        return '%s-%s.%s' % (self.name, self.version, self.arch)
 
 def installed(name='/var/lib/rpm/Packages'):
     db = bsddb.hashopen(name, 'r')
