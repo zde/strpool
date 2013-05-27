@@ -180,10 +180,10 @@ def parse(fn):
         arch = e.find('{http://linux.duke.edu/metadata/common}arch').text
         arch = arches(arch)
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
-        summ = e.find('{http://linux.duke.edu/metadata/common}summary').text
-        desc = e.find('{http://linux.duke.edu/metadata/common}description').text
-        if type(summ) is unicode: summ = summ.encode('UTF-8')
-        if type(desc) is unicode: desc = desc.encode('UTF-8')
+        summ = e.find('{http://linux.duke.edu/metadata/common}summary').text or ''
+        desc = e.find('{http://linux.duke.edu/metadata/common}description').text or ''
+        if type(summ) is unicode: summ = summ.encode('utf-8')
+        if type(desc) is unicode: desc = desc.encode('utf-8')
         prco = [(name, (2, ver))], [], [], [], []; tgt = None
         for v in e.find('{http://linux.duke.edu/metadata/common}format').getiterator():
             if v.tag == '{http://linux.duke.edu/metadata/common}file':
@@ -228,7 +228,6 @@ def dump(fn, (arches, provides, versions, packages)):
         tuple([(provides[n], f and (f[0], versions[f[1]])) for n, f in ps] for ps in prco)
         for name, ver, arch, loc, summ, desc, prco in packages]
     buf = strpool.buf()
-    print fn
     buf.dump_pool(packages)
     write(buf)
 

@@ -220,7 +220,8 @@ _buf_dump_tuple(struct buf *self, uint8_t *pos, PyObject *arg)
             while (s >= 0x80)
                 s >>= 7, *--pos = --s | 0x80;
         } else {
-            PyErr_Format(PyExc_TypeError, "cannot dump %s", Py_TYPE(item)->tp_name);
+            PyErr_Format(PyExc_TypeError, "cannot dump [%d]=%s",
+                ++i, Py_TYPE(item)->tp_name);
             return NULL;
         }
     }
