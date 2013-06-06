@@ -1,5 +1,5 @@
 #! /usr/bin/python
-import os, strpool, re
+import os, re
 
 class Names(dict):
     def add(self, s):
@@ -66,35 +66,6 @@ class Versions(dict):
         # renumber
         for s in self:
             self[s] = inv[self[s]]
-
-class DB:
-    def __init__(self, filename):
-        # map database to memory
-        buf = strpool.mmap(open(filename))
-        buf = strpool.chunk(buf)
-
-        # parse tables
-        while buf:
-            tag = buf.load_raw(4)
-            pool = buf.load_pool()
-            setattr(self, tag, pool)
-
-if 1:
-    n = Names()
-    for i in 'a ab abc'.split():
-        n.add(i)
-    v = Versions()
-    for i in '1 1.2 0:1.2 0:1.2b-17el6 1:3.4-5 1.2~'.split():
-        v.add(i)
-
-    buf = strpool.buf()
-    n.save(buf)
-    v.save(buf)
-    open('/tmp/test', 'w').write(buf)
-
-    db = DB('/tmp/test')
-    #print map(str, db.name)
-    #print map(str, db.vers)
 
 if 1:
     import re
@@ -172,15 +143,12 @@ _ + 0
 100 99 1
 1000 999 1
 '''):
+        v = Versions()
+        err = 0
         v.add(a); v.add(b)
         d = str(cmp(v[a], v[b]))
         if d != c:
             print 'XXX', a, b, c, d
             print v[a], v[b]
-
-    buf = strpool.buf()
-    buf.dump(5, [1, 2], [('a', 1, None), ('b', 2, ('x',))])
-    print repr(str(buf))
-    ch = strpool.chunk(buf)
-    print ch.load(0, [0], [('', 0, ('',))])
-    print repr(str(ch))
+            err += 1
+    print err and '%d errors' % err or 'all ok'
