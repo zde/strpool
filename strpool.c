@@ -334,7 +334,6 @@ struct chunk {
     PyObject_HEAD
     const uint8_t *buf;
     size_t size;
-    PyObject *base;
 };
 
 static struct chunk*
@@ -357,7 +356,6 @@ chunk_new(PyTypeObject *type, PyObject *args)
     if (!self) goto err;
     self->buf = buf;
     self->size = size;
-    self->base = base; Py_INCREF(base);
     return self;
 
  err_size:
@@ -366,22 +364,11 @@ chunk_new(PyTypeObject *type, PyObject *args)
     return NULL;
 }
 
-static void
-chunk_dealloc(struct chunk *self)
-{
-    Py_DECREF(self->base);
-    PyObject_DEL(self);
-}
-
 static PyObject*
 chunk_repr(struct chunk *self)
 {
-    PyObject *base = Py_TYPE(self->base)->tp_repr(self->base);
-    PyObject *ret = PyString_FromFormat(
-        "<%s %p %d of %s>", Py_TYPE(self)->tp_name, self->buf, self->size,
-        PyString_AS_STRING(base));
-    Py_DECREF(base);
-    return ret;
+    return PyString_FromFormat("<%s %p %d>",
+        Py_TYPE(self)->tp_name, self->buf, self->size);
 }
 
 static int
@@ -393,8 +380,6 @@ chunk_compare(struct chunk *a, struct chunk *b)
 
     if (ap == bp)
         return 0;
-    if (a->base == b->base)
-        cmp = ap - bp;
     else {
         const uint8_t *aend = ap + a->size;
         const uint8_t *bend = bp + b->size;
@@ -451,7 +436,6 @@ chunk_load(struct chunk *self, PyObject *arg)
                 s = s - 0x7f << 7;
             chunk->buf = buf; buf += s;
             chunk->size = s;
-            chunk->base = (PyObject*)self; Py_INCREF(self);
             item = (PyObject*)chunk;
         } else
         if (PyList_CheckExact(item) && Py_SIZE(item) == 1) {
@@ -533,7 +517,6 @@ chunk_load_cstr(struct chunk *self)
         if (!ret) return NULL;
         ret->buf = self->buf;
         ret->size = buf - self->buf;
-        ret->base = (PyObject*)self; Py_INCREF(self);
         self->buf = ++buf;
         self->size -= buf - ret->buf;
         return (PyObject*)ret;
@@ -570,7 +553,6 @@ static PyTypeObject chunk_type = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_base = &mmap_type,
     .tp_new = (newfunc)chunk_new,
-    .tp_dealloc = (destructor)chunk_dealloc,
     .tp_repr = (reprfunc)chunk_repr,
     .tp_compare = (cmpfunc)chunk_compare,
     .tp_hash = (hashfunc)chunk_hash,
@@ -610,7 +592,6 @@ pool_item(struct pool *self, Py_ssize_t i)
     if (!chunk) return NULL;
     chunk->buf = self->buf + self->item[i];
     chunk->size = self->item[i + 1] - self->item[i];
-    chunk->base = (PyObject*)self; Py_INCREF(self);
     return (PyObject*)chunk;
 }
 

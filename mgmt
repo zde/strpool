@@ -246,7 +246,8 @@ class Repo:
     def __init__(self, name, fn):
         tm()
         self.name = name
-        db = strpool.chunk(strpool.mmap(open(fn)))
+        self.mmap = strpool.mmap(open(fn))
+        db = strpool.chunk(self.mmap)
         if db.load_raw(4) != 'PKGS':
             raise IOError, 'Repository signature not found'
         self.arches   = db.load_pool()
