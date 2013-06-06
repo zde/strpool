@@ -242,6 +242,18 @@ def tm(title=None, *args):
         sys.stderr.write('%6.2fms %s\n' % (elapsed*1e3, title % args))
     _curr = time()
 
+class Package:
+    def __init__(self, repo, chunk):
+        self.repo = repo
+        self.chunk = chunk
+        n, v, a, self.location, self.summary, self.description = chunk.load(0, 0, 0, '', '', '')
+        self.name = repo.provides[n].load_cstr()
+        self.version = repo.versions[v]
+        self.arch = repo.arches[a]
+
+    def __str__(self):
+        return '%s-%s.%s' % (self.name, self.version, self.arch)
+
 class Repo:
     def __init__(self, name, fn):
         tm()
@@ -262,17 +274,11 @@ class Repo:
     def __str__(self): return self.name
     def __len__(self): return len(self.packages)
 
-    def __getitem__(self, pkg):
-        n, v, a, l = self.packages[pkg].load(0, 0, 0, '')
-        return '%s-%s.%s %s' % (
-            self.provides[n].load_cstr(),
-            self.versions[v],
-            self.arches[a],
-            l
-        )
+    def __getitem__(self, pkgid):
+        return Package(self, self.packages[pkgid])
 
-    def search(self, patterns, is_pkg):
-        dup = set()
+    def search(self, patterns, provides):
+        pkgids = set()
         for pat in patterns:
             if pat[-1:] == '*': pat = pat[:-1]
             else: pat += '\0'
@@ -282,15 +288,20 @@ class Repo:
                 if not p.startswith(pat): break
                 if p.load_cstr():
                     while p:
-                        pkg, = p.load(0)
-                        if is_pkg and self.packages[pkg].load(0)[0] != i: continue
-                        if pkg not in dup: dup.add(pkg); yield pkg
+                        pkgid = p.load(0)[0]
+                        if provides or self.packages[pkgid].load(0)[0] == i:
+                            pkgids.add(pkgid)
                 i += 1
+        return pkgids
 
 class Sack(set):
-    def search(self, patterns, is_pkg):
+    def search(self, patterns, provides):
         for repo in self:
-            yield repo, repo.search(patterns, is_pkg)
+            pkgids = repo.search(patterns, provides)
+            if pkgids: yield repo, pkgids
+
+if not os.isatty(sys.stdout.fileno()): color = lambda n: ''
+else: color = lambda n: '\x1b[3%dm' % n
 
 if __name__ == '__main__':
     sack = Sack()
@@ -303,10 +314,16 @@ if __name__ == '__main__':
         sack.add(Repo(n, fn +'.db'))
     # parse args
     cmd, arg = sys.argv[1], sys.argv[2:]
-    if cmd in ('search', 'provides'):
-        for repo, pkgs in sack.search(arg, cmd == 'search'):
-            for pkg in pkgs:
-                print repo, repo[pkg]
+    if cmd in ('provides', 'search', 'info'):
+        fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 0))
+        for repo, pkgids in sack.search(arg, cmd == 'provides'):
+            print '[%s]' % repo
+            for pkgid in pkgids:
+                pkg = repo[pkgid]
+                print fmt % (pkg.name, pkg.version, pkg.arch, pkg.summary)
+                if cmd == 'info':
+                    print pkg.description
+                    print
     elif cmd == 'installed':
         import rpmlib
         for pkg in rpmlib.installed():
