@@ -273,7 +273,6 @@ class Repo:
 
     def __str__(self): return self.name
     def __len__(self): return len(self.packages)
-
     def __getitem__(self, pkgid):
         return Package(self, self.packages[pkgid])
 
@@ -295,6 +294,14 @@ class Repo:
         return pkgids
 
 class Sack(set):
+    def load_repos(self):
+        for n, d in repos():
+            fn = '%s-%s-%s' % (n, var['releasever'], var['basearch'])
+            if not os.access(fn +'.db', os.R_OK):
+                if not os.access(fn +'.xml', os.R_OK):
+                    sync(fn, d)
+                dump(fn +'.db', parse(fn +'.xml'))
+            self.add(Repo(n, fn +'.db'))
     def search(self, patterns, provides):
         for repo in self:
             pkgids = repo.search(patterns, provides)
@@ -305,26 +312,21 @@ else: color = lambda n: '\x1b[3%dm' % n
 
 if __name__ == '__main__':
     sack = Sack()
-    for n, d in repos():
-        fn = '%s-%s-%s' % (n, var['releasever'], var['basearch'])
-        if not os.access(fn +'.db', os.R_OK):
-            if not os.access(fn +'.xml', os.R_OK):
-                sync(fn, d)
-            dump(fn +'.db', parse(fn +'.xml'))
-        sack.add(Repo(n, fn +'.db'))
-    # parse args
     cmd, arg = sys.argv[1], sys.argv[2:]
-    if cmd in ('provides', 'search', 'info'):
+    if cmd in ('search', 'info', 'provides'):
         fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 0))
+        if arg and arg[0] == 'installed':
+            import rpmlib
+            sack.add(rpmlib.Rpmdb())
+        else:
+            sack.load_repos()
         for repo, pkgids in sack.search(arg, cmd == 'provides'):
-            print '[%s]' % repo
+            print '[%s] (%d)' % (repo, len(repo))
             for pkgid in pkgids:
                 pkg = repo[pkgid]
                 print fmt % (pkg.name, pkg.version, pkg.arch, pkg.summary)
                 if cmd == 'info':
+                    if pkg.location:
+                        print 'Location: %s%s%s' % (color(2), pkg.location, color(0))
                     print pkg.description
                     print
-    elif cmd == 'installed':
-        import rpmlib
-        for pkg in rpmlib.installed():
-            print pkg

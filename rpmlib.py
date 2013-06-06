@@ -1,8 +1,10 @@
 #! /usr/bin/python
-import bsddb
+import bsddb, re
 from struct import unpack
 
 class Package(object):
+    location = None
+
     def __init__(self, hdr, i=0):
         tags = {}
         n, s = unpack('>2I', hdr[i:i + 8])
@@ -22,7 +24,7 @@ class Package(object):
         except KeyError: return
         hdr = self.hdr; offset += self.base
         while count:
-            if typ == 6 or typ == 8:
+            if typ == 6 or typ == 8 or typ == 9:
                 p = hdr.index('\0', offset)
                 yield hdr[offset:p]
                 offset = p + 1
@@ -31,18 +33,25 @@ class Package(object):
                 yield unpack('>I', hdr[offset:p])[0]
                 offset = p
             else:
-                raise ValueError
+                raise ValueError, typ
             count -= 1
 
-    def __str__(self):
-        name, = self._tag(1000)
-        version, = self._tag(1001)
-        release, = self._tag(1002)
-        try: epoch = '%d:' % tuple(self._tag(1003))
-        except: epoch = ''
-        try: arch = '.%s' % tuple(self._tag(1022))
-        except: arch = ''
-        return '%s-%s%s-%s%s' % (name, epoch, version, release, arch)
+    name2tag = {
+        'name': 1000,
+        'version': 1001,
+        'release': 1002,
+        'epoch': 1003,
+        'summary': 1004,
+        'description': 1005,
+        'arch': 1022,
+    }
+
+    def __getattr__(self, name):
+        try:
+            return self._tag(self.name2tag[name]).next()
+        except StopIteration:
+            if name == 'arch': return None
+            raise
 
     def _prco(self, *arg):
         name, flag, ver = map(self._tag, arg)
@@ -57,34 +66,31 @@ class Package(object):
     provides = property(lambda self: self._prco(1047, 1112, 1113))
     requires = property(lambda self: self._prco(1049, 1048, 1050))
 
+class Rpmdb:
+    def __init__(self, name='/var/lib/rpm/Packages'):
+        db = bsddb.hashopen(name, 'r')
+        k, v = db.first()
+        assert k == '\0\0\0\0'
+        assert len(v) == 4
+        self.packages = []
+        while 1:
+            try: k, v = db.next()
+            except: break
+            assert len(k) == 4
+            self.packages.append(Package(v))
+        db.close()
 
-    if 0:
-        # prco
-        xlat = None, 1, 4, 5, 2, 3, 6, None
-        def decode(flag, version):
-            flag = xlat[flag >> 1 & 7]
-            if flag: flag = flag, version
-            return flag
-        def prco(*tags):
-            return [(name, decode(flag, version))
-                    for name, flag, version in zip(*[d.get(t, ()) for t in tags])]
-        self.provides = prco(1047, 1112, 1113)
-        self.requires = prco(1049, 1048, 1050)
+    def __str__(self): return 'installed'
+    def __len__(self): return len(self.packages)
+    def __getitem__(self, n):
+        return self.packages[n]
 
-def installed(name='/var/lib/rpm/Packages'):
-    db = bsddb.hashopen(name, 'r')
-    k, v = db.first()
-    assert k == '\0\0\0\0'
-    assert len(v) == 4
-    while 1:
-        try: k, v = db.next()
-        except: break
-        assert len(k) == 4
-        yield Package(v)
-    db.close()
-
-if __name__ == '__main__':
-    for pkg in installed():
-        print pkg
-        for p in pkg.requires:
-            print '\t', p
+    def search(self, patterns, provides):
+        pat = re.compile('^(%s)$' % '|'.join(
+            p[-1:] == '*' and re.escape(p[:-1])+'.*' or re.escape(p)
+            for p in patterns))
+        pkgids = []
+        for pkgid, pkg in enumerate(self.packages):
+            if pat.match(pkg.name):
+                pkgids.append(pkgid)
+        return pkgids
