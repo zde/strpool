@@ -93,4 +93,9 @@ class Rpmdb:
         for pkgid, pkg in enumerate(self.packages):
             if pat.match(pkg.name):
                 pkgids.append(pkgid)
+                continue
+            for name, f in pkg.provides:
+                if pat.match(name):
+                    pkgids.append(pkgid)
+                    break
         return pkgids
