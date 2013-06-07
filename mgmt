@@ -231,17 +231,6 @@ def dump(fn, (arches, provides, versions, packages)):
     buf.dump_pool(packages)
     write(buf)
 
-from time import time
-_curr = None
-
-def tm(title=None, *args):
-    return
-    global _curr
-    if title:
-        elapsed = time() - _curr
-        sys.stderr.write('%6.2fms %s\n' % (elapsed*1e3, title % args))
-    _curr = time()
-
 class Package:
     def __init__(self, chunk, repo):
         self.chunk = chunk
@@ -256,20 +245,15 @@ class Package:
 
 class Repo:
     def __init__(self, name, fn):
-        tm()
         self.name = name
         self.mmap = strpool.mmap(open(fn))
         db = strpool.chunk(self.mmap)
         if db.load_raw(4) != 'PKGS':
             raise IOError, 'Repository signature not found'
         self.arches   = db.load_pool()
-        tm('open %s', fn)
         self.provides = db.load_pool()
-        tm('%d provides', len(self.provides))
         self.versions = db.load_pool()
-        tm('%d versions', len(self.versions))
         self.packages = db.load_pool()
-        tm('%d packages', len(self.packages))
 
     def __str__(self): return self.name
     def __len__(self): return len(self.packages)
