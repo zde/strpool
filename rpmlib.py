@@ -70,11 +70,15 @@ class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
         self.packages = bsddb.hashopen(path + 'Packages', 'r')
         self.provides = bsddb.btopen(path + 'Providename', 'r')
+        self.cache = {}
 
     def __str__(self): return 'installed'
     def __len__(self): return len(self.packages) - 1
     def __getitem__(self, pkgid):
-        return Package(self.packages[pkgid])
+        pkg = self.cache.get(pkgid)
+        if not pkg:
+            pkg = self.cache[pkgid] = Package(self.packages[pkgid])
+        return pkg
 
     def search(self, patterns, provides):
         dup = set()
