@@ -316,7 +316,7 @@ def main():
         if opt in ('available', 'all'): sack.load_repos()
         hdr_fmt = color(5)+'[%s, %d packages] '+color(0)
         fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 0))
-        for repo, pkgids in sack.search(arg, cmd == 'provides'):
+        for repo, pkgids in sack.search(arg or ['*'], cmd == 'provides'):
             hdr = True
             for pkgid in pkgids:
                 if hdr: hdr = False; print hdr_fmt % (repo, len(repo))
