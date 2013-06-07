@@ -61,8 +61,14 @@ class Package(object):
             elif f == 4: yield n, v
             else: yield n, (f & 1 | f >> 1 & 2 | f << 1 & 4, v)
 
-    provides = property(lambda self: self._prco(1047, 1112, 1113))
-    requires = property(lambda self: self._prco(1049, 1048, 1050))
+    @property
+    def provides(self): return self._prco(1047, 1112, 1113)
+    @property
+    def requires(self): return self._prco(1049, 1048, 1050)
+    @property
+    def conflicts(self): return self._prco(1054, 1053, 1055)
+    @property
+    def obsoletes(self): return self._prco(1090, 1114, 1115)
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
