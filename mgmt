@@ -314,10 +314,12 @@ def main():
         sack = Sack()
         if opt in ('installed', 'all'): sack.load_rpmdb()
         if opt in ('available', 'all'): sack.load_repos()
+        hdr_fmt = color(5)+'[%s, %d packages] '+color(0)
         fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 0))
         for repo, pkgids in sack.search(arg, cmd == 'provides'):
-            print '[%s] (%d)' % (repo, len(repo))
+            hdr = True
             for pkgid in pkgids:
+                if hdr: hdr = False; print hdr_fmt % (repo, len(repo))
                 pkg = repo[pkgid]
                 print fmt % (pkg.name, pkg.evr, pkg.arch, pkg.summary)
                 if cmd == 'info':
