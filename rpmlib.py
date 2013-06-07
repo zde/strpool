@@ -6,62 +6,60 @@ class Package(object):
     location = None
 
     def __init__(self, hdr, i=0):
-        tags = {}
         n, s = unpack('>2I', hdr[i:i + 8])
-        i += 8
+        i += 8; b = i + n*16; assert b + s <= len(hdr)
+        tags = {}
         while n:
-            tag, typ, offset, count = unpack('>4I', hdr[i:i + 16])
-            tags[tag] = typ, offset, count
-            i += 16; n -= 1
-        if i + s > len(hdr):
-            raise ValueError
-        self.tags = tags
-        self.hdr = hdr
-        self.base = i
- 
-    def _tag(self, tag):
-        try: typ, offset, count = self.tags[tag]
+            tag, typ, offset, count = unpack('>4I', hdr[i:i + 16]); assert offset < s
+            tags[tag] = b + offset, count; i += 16; n -= 1
+        self._hdr = hdr
+        self._tags = tags
+        self.name = self[1000]
+
+    def __getitem__(self, tag):
+        i = self._tags[tag][0]; hdr = self._hdr
+        return hdr[i:hdr.index('\0', i)]
+
+    @property
+    def evr(self):
+        evr = '%s-%s' % (self[1001], self[1002])
+        if 1003 in self._tags:
+            e = self._tags[1003][0]
+            e = unpack('>I', self._hdr[e:e + 4])[0]
+            if e: evr = '%d:%s' % (e, evr)
+        return evr
+    @property
+    def arch(self): return self[1022]
+    @property
+    def summary(self): return self[1004]
+    @property
+    def description(self): return self[1005]
+
+    def _list(self, tag):
+        try: i, count = self._tags[tag]
         except KeyError: return
-        hdr = self.hdr; offset += self.base
+        hdr = self._hdr
         while count:
-            if typ == 6 or typ == 8 or typ == 9:
-                p = hdr.index('\0', offset)
-                yield hdr[offset:p]
-                offset = p + 1
-            elif typ == 4:
-                p = offset + 4
-                yield unpack('>I', hdr[offset:p])[0]
-                offset = p
-            else:
-                raise ValueError, typ
-            count -= 1
-
-    name2tag = {
-        'name': 1000,
-        'version': 1001,
-        'release': 1002,
-        'epoch': 1003,
-        'summary': 1004,
-        'description': 1005,
-        'arch': 1022,
-    }
-
-    def __getattr__(self, name):
-        try:
-            return self._tag(self.name2tag[name]).next()
-        except StopIteration:
-            if name == 'arch': return None
-            raise
-
-    def _prco(self, *arg):
-        name, flag, ver = map(self._tag, arg)
-        while True:
+            p = hdr.index('\0', i); yield hdr[i:p]
+            i = p + 1; count -= 1
+    def _list_n(self, tag):
+        try: i, count = self._tags[tag]
+        except KeyError: return
+        hdr = self._hdr
+        while count:
+            yield unpack('>I', hdr[i:i + 4])[0]
+            i += 4; count -= 1
+    def _prco(self, name, flag, ver):
+        name = self._list(name)
+        flag = self._list_n(flag)
+        ver = self._list(ver)
+        while 1:
             n = name.next()
-            f = flag.next()
+            f = flag.next() >> 1 & 7
             v = ver.next()
-            f = (None, 1, 4, 5, 2, 3, 6, None)[f >> 1 & 7]
-            if f: f = f, v
-            yield n, f
+            if f == 0: yield n, None
+            elif f == 4: yield n, v
+            else: yield n, (f & 1 | f >> 1 & 2 | f << 1 & 4, v)
 
     provides = property(lambda self: self._prco(1047, 1112, 1113))
     requires = property(lambda self: self._prco(1049, 1048, 1050))

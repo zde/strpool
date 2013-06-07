@@ -237,7 +237,7 @@ class Package:
         self.repo = repo
         n, v, a, self.location, self.summary, self.description = chunk.load(0, 0, 0, '', '', '')
         self.name = repo.provides[n].load_cstr()
-        self.version = repo.versions[v]
+        self.evr = repo.versions[v]
         self.arch = repo.arches[a]
 
     def __str__(self):
@@ -319,7 +319,7 @@ def main():
             print '[%s] (%d)' % (repo, len(repo))
             for pkgid in pkgids:
                 pkg = repo[pkgid]
-                print fmt % (pkg.name, pkg.version, pkg.arch, pkg.summary)
+                print fmt % (pkg.name, pkg.evr, pkg.arch, pkg.summary)
                 if cmd == 'info':
                     if pkg.location:
                         print 'Location: %s%s%s' % (color(2), pkg.location, color(0))
