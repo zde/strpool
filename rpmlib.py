@@ -88,7 +88,8 @@ class Rpmdb:
                 check = lambda name: name.startswith(pat)
             else:
                 check = lambda name: name == pat
-            name, p = self.provides.set_location(pat)
+            try: name, p = self.provides.set_location(pat)
+            except: continue
             while check(name):
                 i = 0
                 while i < len(p):
@@ -96,4 +97,5 @@ class Rpmdb:
                     if pkgid in dup: continue
                     if provides or self[pkgid].name == name:
                         yield pkgid; dup.add(pkgid)
-                name, p = self.provides.next()
+                try: name, p = self.provides.next()
+                except: break
