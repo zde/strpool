@@ -1,5 +1,5 @@
 #! /usr/bin/python
-import bsddb, re
+import bsddb
 from struct import unpack
 
 class Package(object):
@@ -67,35 +67,29 @@ class Package(object):
     requires = property(lambda self: self._prco(1049, 1048, 1050))
 
 class Rpmdb:
-    def __init__(self, name='/var/lib/rpm/Packages'):
-        db = bsddb.hashopen(name, 'r')
-        k, v = db.first()
-        assert k == '\0\0\0\0'
-        assert len(v) == 4
-        self.packages = []
-        while 1:
-            try: k, v = db.next()
-            except: break
-            assert len(k) == 4
-            self.packages.append(Package(v))
-        db.close()
+    def __init__(self, path='/var/lib/rpm/'):
+        self.packages = bsddb.hashopen(path + 'Packages', 'r')
+        self.provides = bsddb.btopen(path + 'Providename', 'r')
 
     def __str__(self): return 'installed'
-    def __len__(self): return len(self.packages)
-    def __getitem__(self, n):
-        return self.packages[n]
+    def __len__(self): return len(self.packages) - 1
+    def __getitem__(self, pkgid):
+        return Package(self.packages[pkgid])
 
     def search(self, patterns, provides):
-        pat = re.compile('^(%s)$' % '|'.join(
-            p[-1:] == '*' and re.escape(p[:-1])+'.*' or re.escape(p)
-            for p in patterns))
-        pkgids = []
-        for pkgid, pkg in enumerate(self.packages):
-            if pat.match(pkg.name):
-                pkgids.append(pkgid)
-                continue
-            for name, f in pkg.provides:
-                if pat.match(name):
-                    pkgids.append(pkgid)
-                    break
-        return pkgids
+        dup = set()
+        for pat in patterns:
+            if pat[-1:] == '*':
+                pat = pat[:-1]
+                check = lambda name: name.startswith(pat)
+            else:
+                check = lambda name: name == pat
+            name, p = self.provides.set_location(pat)
+            while check(name):
+                i = 0
+                while i < len(p):
+                    pkgid = p[i:i + 4]; i += 8
+                    if pkgid in dup: continue
+                    if provides or self[pkgid].name == name:
+                        yield pkgid; dup.add(pkgid)
+                name, p = self.provides.next()

@@ -277,10 +277,12 @@ class Repo:
         return Package(self.packages[pkgid], self)
 
     def search(self, patterns, provides):
-        pkgids = set()
+        dup = set()
         for pat in patterns:
-            if pat[-1:] == '*': pat = pat[:-1]
-            else: pat += '\0'
+            if pat[-1:] == '*':
+                pat = pat[:-1]
+            else:
+                pat += '\0'
             i = self.provides.find(pat)
             while i < len(self.provides):
                 p = self.provides[i]
@@ -288,10 +290,10 @@ class Repo:
                 if p.load_cstr():
                     while p:
                         pkgid = p.load(0)[0]
+                        if pkgid in dup: continue
                         if provides or self.packages[pkgid].load(0)[0] == i:
-                            pkgids.add(pkgid)
+                            yield pkgid; dup.add(pkgid)
                 i += 1
-        return pkgids
 
 class Sack(set):
     def load_repos(self):
@@ -305,7 +307,7 @@ class Sack(set):
     def search(self, patterns, provides):
         for repo in self:
             pkgids = repo.search(patterns, provides)
-            if pkgids: yield repo, pkgids
+            yield repo, pkgids
 
 if not os.isatty(sys.stdout.fileno()): color = lambda n: ''
 else: color = lambda n: '\x1b[3%dm' % n
