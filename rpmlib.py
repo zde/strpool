@@ -69,6 +69,12 @@ class Package(object):
     def conflicts(self): return self._prco(1054, 1053, 1055)
     @property
     def obsoletes(self): return self._prco(1090, 1114, 1115)
+    @property
+    def files(self):
+        dirs = list(self._list(1118))
+        dirindex = self._list_n(1116)
+        basename = self._list(1117)
+        while 1: yield dirs[dirindex.next()] + basename.next()
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
