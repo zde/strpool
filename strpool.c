@@ -553,6 +553,7 @@ static PyTypeObject chunk_type = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_base = &mmap_type,
     .tp_new = (newfunc)chunk_new,
+    .tp_dealloc = (destructor)PyObject_DEL,
     .tp_repr = (reprfunc)chunk_repr,
     .tp_compare = (cmpfunc)chunk_compare,
     .tp_hash = (hashfunc)chunk_hash,
