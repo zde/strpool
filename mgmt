@@ -63,9 +63,10 @@ class Http:
         self.buf = self.buf[i + 4:]
         assert len(self.buf) <= self.cl, self.buf
         if csum:
-            ct, csum = csum
-            if ct == 'sha': ct = 'sha1'
-            self.csum = hashlib.new(ct), csum
+            h, csum = csum
+            if h == 'sha': h = 'sha1'
+            csum = hashlib.new(h), csum
+        self.csum = csum
         self.tee = tee
 
     def read(self, n=0x4000):
