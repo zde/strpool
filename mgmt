@@ -62,7 +62,10 @@ class Http:
         assert self.cl > 0, self.cl
         self.buf = self.buf[i + 4:]
         assert len(self.buf) <= self.cl, self.buf
-        self.csum = csum and (hashlib.new(csum[0]), csum[1])
+        if csum:
+            ct, csum = csum
+            if ct == 'sha': ct = 'sha1'
+            self.csum = hashlib.new(ct), csum
         self.tee = tee
 
     def read(self, n=0x4000):
@@ -131,31 +134,25 @@ def sync(fn, d):
         except IOError, e: print e
 
 class Pool(dict):
-    def __init__(self):
-        self.keys = {}
     def __call__(self, s, key=None):
         if type(s) is not str:
             assert type(s) is unicode, s
             s = s.encode('UTF-8')
-        if type(key) is int:
-            l = self.keys.setdefault(s, [])
-            if not key in l: l.append(key)
-        return self.setdefault(s, s)
+        l = self.setdefault(s, [])
+        if type(key) is int and key not in l:
+            l.append(key)
+        return s
+
     def list(self):
-        ret = sorted(self)
-        n = 0
-        for s in ret:
-            self[s] = n
-            n += 1
-        if self.keys:
-            def add_keys(s):
-                if s in self.keys:
-                    buf = strpool.buf()
-                    buf.dump(0, *tuple(self.keys[s]))
-                    buf.dump_raw(s)
-                    s = str(buf)
-                return s
-            ret = map(add_keys, ret)
+        ret = []
+        for s in sorted(self):
+            l = self[s]; self[s] = len(ret)
+            if l:
+                buf = strpool.buf()
+                buf.dump(0, *tuple(l))
+                buf.dump_raw(s)
+                s = str(buf)
+            ret.append(s)
         return ret
 
 def evr(get):
