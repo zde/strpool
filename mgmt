@@ -168,6 +168,7 @@ def parse(fn):
     arches = Pool()
     provides = Pool()
     versions = Pool()
+    ctypes = Pool()
     packages = []
     for _, e in ET.iterparse(open(fn)):
         if e.tag != '{http://linux.duke.edu/metadata/common}package': continue
@@ -177,6 +178,8 @@ def parse(fn):
         ver = versions(ver)
         arch = e.find('{http://linux.duke.edu/metadata/common}arch').text
         arch = arches(arch)
+        csum = e.find('{http://linux.duke.edu/metadata/common}checksum')
+        ctype = ctypes(csum.get('type')); csum = csum.text
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
         summ = e.find('{http://linux.duke.edu/metadata/common}summary').text or ''
         desc = e.find('{http://linux.duke.edu/metadata/common}description').text or ''
@@ -206,25 +209,25 @@ def parse(fn):
                 v = provides(get('name'), t == 0 and len(packages)), f
                 if v not in prco[t]: prco[t].append(v)
         del prco[0][0]
-        packages.append((name, ver, arch, loc, summ, desc, prco))
+        packages.append((name, ver, arch, ctype, csum, loc, summ, desc, prco))
         e.clear()
-    return arches, provides, versions, packages
+    return arches, provides, versions, ctypes, packages
 
 import strpool
 
-def dump(fn, (arches, provides, versions, packages)):
+def dump(fn, (arches, provides, versions, ctypes, packages)):
     write = open(fn, 'wb').write
     # write header
     write('PKGS')
-    for i in arches, provides, versions:
+    for i in arches, provides, versions, ctypes:
         buf = strpool.buf()
         buf.dump_pool(i.list())
         write(buf)
     # write packages
     packages = [
-        (provides[name], versions[ver], arches[arch], loc, summ, desc) +
+        (provides[name], versions[ver], arches[arch], ctypes[ctype], csum, loc, summ, desc) +
         tuple([(provides[n], f and (f[0], versions[f[1]])) for n, f in ps] for ps in prco)
-        for name, ver, arch, loc, summ, desc, prco in packages]
+        for name, ver, arch, ctype, csum, loc, summ, desc, prco in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
@@ -233,10 +236,11 @@ class Package:
     def __init__(self, chunk, repo):
         self.chunk = chunk
         self.repo = repo
-        n, v, a, self.location, self.summary, self.description = chunk.load(0, 0, 0, '', '', '')
+        n, v, a, ct, csum, self.location, self.summary, self.description = chunk.load(0, 0, 0, 0, '', '', '', '')
         self.name = repo.provides[n].load_cstr()
         self.evr = repo.versions[v]
         self.arch = repo.arches[a]
+        self.csum = repo.ctypes[ct], csum
 
     def __str__(self):
         return '%s-%s.%s' % (self.name, self.version, self.arch)
@@ -251,6 +255,7 @@ class Repo:
         self.arches   = db.load_pool()
         self.provides = db.load_pool()
         self.versions = db.load_pool()
+        self.ctypes   = db.load_pool()
         self.packages = db.load_pool()
 
     def __str__(self): return self.name
@@ -322,6 +327,7 @@ def main():
                 print fmt % (pkg.name, pkg.evr, pkg.arch, pkg.summary)
                 if cmd == 'info':
                     if pkg.location:
+                        print 'Checksum: %s%s%s (%s)' % (color(2), pkg.csum[1], color(0), pkg.csum[0])
                         print 'Location: %s%s%s' % (color(2), pkg.location, color(0))
                     print pkg.description
                     print
