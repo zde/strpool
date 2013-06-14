@@ -92,6 +92,12 @@ class Rpmdb:
         if not pkg:
             pkg = self.cache[pkgid] = Package(self.packages[pkgid])
         return pkg
+    def __iter__(self):
+        self.packages.first()
+        while 1:
+            try: key, pkg = self.packages.next()
+            except: break
+            yield self[key]
 
     def search(self, patterns, provides):
         dup = set()
