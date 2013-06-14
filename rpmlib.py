@@ -16,6 +16,9 @@ class Package(object):
         self._tags = tags
         self.name = self[1000]
 
+    def __str__(self):
+        return '%s-%s.%s' % (self.name, self.evr, self.arch)
+
     def __getitem__(self, tag):
         i = self._tags[tag][0]; hdr = self._hdr
         return hdr[i:hdr.index('\0', i)]
@@ -29,7 +32,7 @@ class Package(object):
             if e: evr = '%d:%s' % (e, evr)
         return evr
     @property
-    def arch(self): return self[1022]
+    def arch(self): return 1022 in self._tags and self[1022] or 'noarch'
     @property
     def summary(self): return self[1004]
     @property

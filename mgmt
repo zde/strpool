@@ -243,7 +243,7 @@ class Package:
         self.csum = repo.ctypes[ct], csum
 
     def __str__(self):
-        return '%s-%s.%s' % (self.name, self.version, self.arch)
+        return '%s-%s.%s' % (self.name, self.evr, self.arch)
 
 class Repo:
     def __init__(self, name, fn):
