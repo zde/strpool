@@ -331,6 +331,12 @@ def main():
                         print 'Location: %s%s%s' % (color(2), pkg.location, color(0))
                     print pkg.description
                     print
+    elif cmd == 'verify':
+        sack = Sack()
+        sack.load_rpmdb()
+        from solv import Solver
+        solv = Solver(sack)
+        solv.verify()
     else:
         print 'bad command'
 
