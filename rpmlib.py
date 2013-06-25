@@ -81,8 +81,9 @@ class Package(object):
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
+        self.path = path
+        self.indices = ['Name', 'Providename']
         self.packages = bsddb.hashopen(path + 'Packages', 'r')
-        self.provides = bsddb.btopen(path + 'Providename', 'r')
         self.cache = {}
 
     def __str__(self): return 'installed'
@@ -100,6 +101,9 @@ class Rpmdb:
             yield self[key]
 
     def search(self, patterns, provides):
+        db = self.indices[provides]
+        if type(db) is str:
+            db = self.indices[provides] = bsddb.btopen(self.path + db, 'r')
         dup = set()
         for pat in patterns:
             if pat[-1:] == '*':
@@ -107,14 +111,13 @@ class Rpmdb:
                 check = lambda name: name.startswith(pat)
             else:
                 check = lambda name: name == pat
-            try: name, p = self.provides.set_location(pat)
+            try: name, p = db.set_location(pat)
             except: continue
             while check(name):
                 i = 0
                 while i < len(p):
                     pkgid = p[i:i + 4]; i += 8
                     if pkgid in dup: continue
-                    if provides or self[pkgid].name == name:
-                        yield pkgid; dup.add(pkgid)
-                try: name, p = self.provides.next()
+                    yield pkgid; dup.add(pkgid)
+                try: name, p = db.next()
                 except: break
