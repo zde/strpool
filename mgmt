@@ -39,29 +39,36 @@ class Http:
         m = re.search('^(\w+)://(.+)', url)
         if m:
             proto, url = m.groups()
+        if proto == 'file':
+            self.host = None
+            self.cl = os.path.getsize(url)
+            self.buf = ''
+            self.recv = open(url, 'rb').read
+        else:
             if proto not in ('http', 'https'):
                 raise NotImplementedError
-        self.host, url = re.search('(.+?)(/.+)', url).groups()
-        get = 'GET %s HTTP/1.1\r\nHost: %s\r\nConnection: Keep-alive\r\n\r\n' % (url, self.host)
-        self.sock = conn.pop(self.host, None)
-        if self.sock:
-            self.sock.sendall(get)
-            self.buf = self.sock.recv(0x4000)
-        if not self.sock or not self.buf:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((self.host, 80))
-            self.sock.sendall(get)
-            self.buf = self.sock.recv(0x4000)
-        while True:
-            i = self.buf.find('\r\n\r\n')
-            if i != -1: break
-            more = self.sock.recv(0x4000)
-            if not more: raise IOError, 'No header'
-            self.buf += more
-        self.cl = int(re.search('\nContent-Length: (\d+)', self.buf).group(1))
-        assert self.cl > 0, self.cl
-        self.buf = self.buf[i + 4:]
-        assert len(self.buf) <= self.cl, self.buf
+            self.host, url = re.search('(.+?)(/.+)', url).groups()
+            get = 'GET %s HTTP/1.1\r\nHost: %s\r\nConnection: Keep-alive\r\n\r\n' % (url, self.host)
+            self.sock = conn.pop(self.host, None)
+            if self.sock:
+                self.sock.sendall(get)
+                self.buf = self.sock.recv(0x4000)
+            if not self.sock or not self.buf:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect((self.host, 80))
+                self.sock.sendall(get)
+                self.buf = self.sock.recv(0x4000)
+            self.recv = self.sock.recv
+            while True:
+                i = self.buf.find('\r\n\r\n')
+                if i != -1: break
+                more = self.recv(0x4000)
+                if not more: raise IOError, 'No header'
+                self.buf += more
+            self.cl = int(re.search('\nContent-Length: (\d+)', self.buf).group(1))
+            assert self.cl > 0, self.cl
+            self.buf = self.buf[i + 4:]
+            assert len(self.buf) <= self.cl, self.buf
         if csum:
             h, csum = csum
             if h == 'sha': h = 'sha1'
@@ -72,12 +79,12 @@ class Http:
     def read(self, n=0x4000):
         if self.cl == 0:
             return ''
-        buf = self.buf or self.sock.recv(self.cl)
+        buf = self.buf or self.recv(self.cl)
         buf, self.buf = buf[:n], buf[n:]
         if self.csum: self.csum[0].update(buf)
         if self.tee: self.tee(buf)
         self.cl -= len(buf)
-        if self.cl == 0:
+        if self.cl == 0 and self.host:
             conn[self.host] = self.sock
             if self.csum:
                 h, csum = self.csum
@@ -128,7 +135,8 @@ def sync(fn, d):
             csum = best, csum[best]
             base = out
     for base in base:
-        if not base.startswith('http://'): continue
+        if not base.startswith('http://') and \
+           not base.startswith('file://'): continue
         if base.endswith('/repodata/repomd.xml'): base = base[:-19]
         elif not base.endswith('/'): base += '/'
         try: retrieve(fn, base, csum); return True
