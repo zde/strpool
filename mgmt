@@ -186,6 +186,7 @@ def parse(fn):
         ver = versions(ver)
         arch = e.find('{http://linux.duke.edu/metadata/common}arch').text
         arch = arches(arch)
+        size = int(e.find('{http://linux.duke.edu/metadata/common}size').get('package'))
         csum = e.find('{http://linux.duke.edu/metadata/common}checksum')
         ctype = ctypes(csum.get('type')); csum = csum.text
         loc = e.find('{http://linux.duke.edu/metadata/common}location').get('href')
@@ -217,7 +218,7 @@ def parse(fn):
                 v = provides(get('name'), t == 0 and len(packages)), f
                 if v not in prco[t]: prco[t].append(v)
         del prco[0][0]
-        packages.append((name, ver, arch, ctype, csum, loc, summ, desc, prco))
+        packages.append((name, ver, arch, size, ctype, csum, loc, summ, desc, prco))
         e.clear()
     return arches, provides, versions, ctypes, packages
 
@@ -233,9 +234,9 @@ def dump(fn, (arches, provides, versions, ctypes, packages)):
         write(buf)
     # write packages
     packages = [
-        (provides[name], versions[ver], arches[arch], ctypes[ctype], csum, loc, summ, desc) +
+        (provides[name], versions[ver], arches[arch], size, ctypes[ctype], csum, loc, summ, desc) +
         tuple([(provides[n], f and (f[0], versions[f[1]])) for n, f in ps] for ps in prco)
-        for name, ver, arch, ctype, csum, loc, summ, desc, prco in packages]
+        for name, ver, arch, size, ctype, csum, loc, summ, desc, prco in packages]
     buf = strpool.buf()
     buf.dump_pool(packages)
     write(buf)
@@ -244,10 +245,11 @@ class Package:
     def __init__(self, chunk, repo):
         self.chunk = chunk
         self.repo = repo
-        n, v, a, ct, csum, self.location, self.summary, self.description = chunk.load(0, 0, 0, 0, '', '', '', '')
+        n, v, a, size, ct, csum, self.location, self.summary, self.description = chunk.load(0, 0, 0, 0, 0, '', '', '', '')
         self.name = repo.provides[n].load_cstr()
         self.evr = repo.versions[v]
         self.arch = repo.arches[a]
+        self.size = size
         self.csum = repo.ctypes[ct], csum
 
     def __str__(self):
@@ -336,7 +338,7 @@ def main():
                 if cmd == 'info':
                     if pkg.location:
                         print 'Checksum: %s%s%s (%s)' % (color(2), pkg.csum[1], color(0), pkg.csum[0])
-                        print 'Location: %s%s%s' % (color(2), pkg.location, color(0))
+                        print 'Location: %s%s%s (%s bytes)' % (color(2), pkg.location, color(0), pkg.size)
                     print pkg.description
                     print
     elif cmd == 'verify':
