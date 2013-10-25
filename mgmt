@@ -4,7 +4,7 @@ import xml.etree.cElementTree as ET
 
 # configuration
 var = {
-    'releasever': '19',
+    'releasever': '20',
     'basearch': 'x86_64',
 }
 
@@ -120,7 +120,7 @@ def sync(fn, d):
     csum = None
     try: base = d['baseurl'].split()
     except KeyError:
-        url = d['mirrorlist']
+        url = d.get('metalink') or d.get('mirrorlist')
         tee = open(fn +'.metalink', 'wb').write
         base = Http(url, tee=tee)
         if '/metalink?' in url:
@@ -165,7 +165,7 @@ class Pool(dict):
         return ret
 
 def evr(get):
-    ret = get('ver')
+    ret = get('ver') or ''
     e = get('epoch')
     if e and e != '0': ret = e +':'+ ret
     e = get('rel')
