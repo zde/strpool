@@ -75,7 +75,7 @@ class Package(object):
         dirs = list(self._list(1118))
         dirindex = self._list_n(1116)
         basename = self._list(1117)
-        while 1: yield dirs[dirindex.next()] + basename.next()
+        while 1: yield dirs[dirindex.next()] + basename.next(), None, None
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
