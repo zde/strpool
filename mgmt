@@ -265,9 +265,11 @@ class Package:
             n, = load(0)
             while n:
                 p, f = load(0, (0, 0))
+                p = provides[p]
+                p = p.load_cstr() or p
                 if f is None: v = None
                 else: f, v = f; v = versions[v]
-                yield provides[p].load_cstr(), f, v
+                yield p, f, v
                 n -= 1
         while len(self.prco) <= idx:
             self.prco.append(list(prco_load()))
