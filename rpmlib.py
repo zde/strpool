@@ -60,9 +60,7 @@ class Package(object):
             n = name.next()
             f = flag.next() >> 1 & 7
             v = ver.next()
-            if f == 0: yield n, None
-            elif f == 4: yield n, v
-            else: yield n, (f & 1 | f >> 1 & 2 | f << 1 & 4, v)
+            yield n, f & 1 | f >> 1 & 2 | f << 1 & 4, v
 
     @property
     def provides(self): return self._prco(1047, 1112, 1113)
