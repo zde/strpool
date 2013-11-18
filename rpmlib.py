@@ -72,10 +72,13 @@ class Package(object):
     def obsoletes(self): return self._prco(1090, 1114, 1115)
     @property
     def files(self):
+        assert 1027 not in self._tags # OLDFILENAMES
         dirs = list(self._list(1118))
         dirindex = self._list_n(1116)
         basename = self._list(1117)
-        while 1: yield dirs[dirindex.next()] + basename.next(), None, None
+        flags = self._list_n(1037)
+        while 1:
+            yield dirs[dirindex.next()] + basename.next(), flags.next(), None
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
