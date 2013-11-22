@@ -86,10 +86,9 @@ class PackageFile(Package):
         read = open(filename, 'rb').read
         magic = read(8)
         if magic[:4] == '\xed\xab\xee\xdb':
-            read(88) # skip lead
-            magic = read(8)
+            magic = read(96)[-8:] # skip lead
         for i in 'sig', 'rpm': # two header structures
-            if magic[:4] != '\x8e\xad\xe8\x01':
+            if magic[:3] != '\x8e\xad\xe8':
                 raise ValueError
             hdr = read(8); n, s = unpack('>2I', hdr)
             hdr += read(n*16 + (s + 7 & -8))
