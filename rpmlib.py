@@ -76,9 +76,25 @@ class Package(object):
         dirs = list(self._list(1118))
         dirindex = self._list_n(1116)
         basename = self._list(1117)
-        flags = self._list_n(1037)
+        flag = self._list_n(1037)
+        csum = self._list(1035)
         while 1:
-            yield dirs[dirindex.next()] + basename.next(), flags.next(), None
+            yield dirs[dirindex.next()] + basename.next(), flag.next(), csum.next()
+
+class PackageFile(Package):
+    def __init__(self, filename):
+        read = open(filename, 'rb').read
+        magic = read(8)
+        if magic[:4] == '\xed\xab\xee\xdb':
+            read(88) # skip lead
+            magic = read(8)
+        for i in 'sig', 'rpm': # two header structures
+            if magic[:4] != '\x8e\xad\xe8\x01':
+                raise ValueError
+            hdr = read(8); n, s = unpack('>2I', hdr)
+            hdr += read(n*16 + (s + 7 & -8))
+            magic = read(8)
+        Package.__init__(self, hdr)
 
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
