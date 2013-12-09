@@ -175,9 +175,9 @@ def evr(get):
 
 def parse(fn):
     arches = Pool()
+    ctypes = Pool()
     provides = Pool()
     versions = Pool()
-    ctypes = Pool()
     packages = []
     for _, e in ET.iterparse(open(fn)):
         if e.tag != '{http://linux.duke.edu/metadata/common}package': continue
@@ -221,15 +221,15 @@ def parse(fn):
         del prco[0][0]
         packages.append((name, ver, arch, size, ctype, csum, loc, summ, desc, prco))
         e.clear()
-    return arches, provides, versions, ctypes, packages
+    return arches, ctypes, provides, versions, packages
 
 import strpool
 
-def dump(fn, (arches, provides, versions, ctypes, packages)):
+def dump(fn, (arches, ctypes, provides, versions, packages)):
     write = open(fn, 'wb').write
     # write header
     write('PKGS')
-    for i in arches, provides, versions, ctypes:
+    for i in arches, ctypes, provides, versions:
         buf = strpool.buf()
         buf.dump_pool(i.list())
         write(buf)
@@ -294,9 +294,9 @@ class Repo:
         if db.load_raw(4) != 'PKGS':
             raise IOError, 'Repository signature not found'
         self.arches   = db.load_pool()
+        self.ctypes   = db.load_pool()
         self.provides = db.load_pool()
         self.versions = db.load_pool()
-        self.ctypes   = db.load_pool()
         self.packages = db.load_pool()
 
     def __str__(self): return self.name
