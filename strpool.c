@@ -22,7 +22,7 @@ mmap_new(PyTypeObject *type, PyObject *args)
     buf = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fileno(file->f_fp), 0);
     if (buf == MAP_FAILED) goto err_io;
 
-    self = PyObject_NEW(struct mmap, type);
+    self = PyObject_New(struct mmap, type);
     if (!self) goto err;
     self->buf = buf;
     self->size = sb.st_size;
@@ -125,7 +125,7 @@ buf_new(PyTypeObject *type, PyObject *args)
     base = malloc(alloc);
     if (!base) goto err_mem;
 
-    self = PyObject_NEW(struct buf, type);
+    self = PyObject_New(struct buf, type);
     if (!self) goto err_free;
     self->base = base;
     self->buf = base + alloc;
@@ -352,7 +352,7 @@ chunk_new(PyTypeObject *type, PyObject *args)
     size -= offset;
     if (size > want) size = want;
 
-    self = PyObject_NEW(struct chunk, type);
+    self = PyObject_New(struct chunk, type);
     if (!self) goto err;
     self->buf = buf;
     self->size = size;
@@ -430,7 +430,7 @@ chunk_load(struct chunk *self, PyObject *arg)
             if (!item) goto err;
         } else
         if (PyString_CheckExact(item)) {
-            struct chunk *chunk = PyObject_NEW(struct chunk, self->ob_type);
+            struct chunk *chunk = PyObject_New(struct chunk, self->ob_type);
             if (!chunk) goto err;
             for (s = c = *buf++; c & 0x80; s += c = *buf++)
                 s = s - 0x7f << 7;
@@ -513,7 +513,7 @@ chunk_load_cstr(struct chunk *self)
 {
     const uint8_t *buf = memchr(self->buf, 0, self->size);
     if (buf) {
-        struct chunk *ret = PyObject_NEW(struct chunk, Py_TYPE(self));
+        struct chunk *ret = PyObject_New(struct chunk, Py_TYPE(self));
         if (!ret) return NULL;
         ret->buf = self->buf;
         ret->size = buf - self->buf;
@@ -665,7 +665,7 @@ chunk_load_pool(struct chunk *self)
 
     for (s = c = *buf++; c & 0x80; s += c = *buf++)
         s = s - 0x7f << 7;
-    pool = PyObject_NEW_VAR(struct pool, &pool_type, s);
+    pool = PyObject_NewVar(struct pool, &pool_type, s);
     if (!pool) goto err;
     for (i = sum = 0; pool->item[i] = sum, i < Py_SIZE(pool); i++, sum += s)
         for (s = c = *buf++; c & 0x80; s += c = *buf++)
