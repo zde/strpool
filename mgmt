@@ -384,7 +384,7 @@ def main():
         else:
             if opt in ('installed', 'all'): sack.load_rpmdb()
             if opt in ('available', 'all'): sack.load_repos()
-        hdr_fmt = color(9)+'[%s, %d packages]'
+        hdr_fmt = color(5)+'[%s, %d packages]'
         fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 9))
         for repo, pkgids in sack.search(arg or ['*'], cmd == 'provides'):
             hdr = True
