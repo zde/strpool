@@ -366,7 +366,7 @@ def main():
     if cmd in ('search', 'info', 'provides'):
         # extra output
         prco = 'provides', 'requires', 'conflicts', 'obsoletes', 'files'
-        prco_fmt = color(4)+'%s '+color(1)+'%s'+color(0)
+        prco_fmt = color(4)+'%s '+color(1)+'%s'+color(9)
         prco_print = 0
         while arg:
             try: i = prco.index(arg[0])
@@ -384,8 +384,8 @@ def main():
         else:
             if opt in ('installed', 'all'): sack.load_rpmdb()
             if opt in ('available', 'all'): sack.load_repos()
-        hdr_fmt = color(5)+'[%s, %d packages] '+color(0)
-        fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 0))
+        hdr_fmt = color(9)+'[%s, %d packages]'
+        fmt = ' '.join(color(i)+'%s' for i in (4, 1, 3, 9))
         for repo, pkgids in sack.search(arg or ['*'], cmd == 'provides'):
             hdr = True
             for pkgid in pkgids:
@@ -394,8 +394,8 @@ def main():
                 print fmt % (pkg.name, pkg.evr, pkg.arch, pkg.summary)
                 if cmd == 'info':
                     if pkg.location:
-                        print 'Checksum: %s%s%s (%s)' % (color(2), pkg.csum[1], color(0), pkg.csum[0])
-                        print 'Location: %s%s%s (%s bytes)' % (color(2), pkg.location, color(0), pkg.size)
+                        print 'Checksum: %s%s%s (%s)' % (color(2), pkg.csum[1], color(9), pkg.csum[0])
+                        print 'Location: %s%s%s (%s bytes)' % (color(2), pkg.location, color(9), pkg.size)
                     print pkg.description
                     for i, prco_name in enumerate(prco):
                         if 1 << i & prco_print == 0: continue

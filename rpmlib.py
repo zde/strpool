@@ -119,7 +119,7 @@ class Rpmdb:
     def search(self, patterns, provides):
         db = self.indices[provides]
         if type(db) is str:
-            db = self.indices[provides] = bsddb.btopen(self.path + db, 'r')
+            db = self.indices[provides] = bsddb.hashopen(self.path + db, 'r')
         dup = set()
         for pat in patterns:
             if pat[-1:] == '*':

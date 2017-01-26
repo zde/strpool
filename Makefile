@@ -5,4 +5,4 @@ all: $(MODULES)
 
 .SUFFIXES: .so
 .c.so:
-	gcc -g -o $@ --shared $<
+	gcc -g -o $@ -fPIC --shared $<
