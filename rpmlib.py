@@ -1,6 +1,7 @@
 #! /usr/bin/python
 import bsddb
 from struct import unpack
+from bisect import bisect
 
 class Package(object):
     location = None
@@ -98,7 +99,7 @@ class PackageFile(Package):
 class Rpmdb:
     def __init__(self, path='/var/lib/rpm/'):
         self.path = path
-        self.indices = ['Name', 'Providename']
+        self.prov = sorted(bsddb.hashopen(path + 'Providename', 'r').items())
         self.packages = bsddb.hashopen(path + 'Packages', 'r')
         self.cache = {}
 
@@ -117,9 +118,6 @@ class Rpmdb:
             yield self[key]
 
     def search(self, patterns, provides):
-        db = self.indices[provides]
-        if type(db) is str:
-            db = self.indices[provides] = bsddb.hashopen(self.path + db, 'r')
         dup = set()
         for pat in patterns:
             if pat[-1:] == '*':
@@ -127,13 +125,18 @@ class Rpmdb:
                 check = lambda name: name.startswith(pat)
             else:
                 check = lambda name: name == pat
-            try: name, p = db.set_location(pat)
+            try:
+                pos = bisect(self.prov, (pat, None))
+                name, p = self.prov[pos]
             except: continue
             while check(name):
                 i = 0
                 while i < len(p):
                     pkgid = p[i:i + 4]; i += 8
                     if pkgid in dup: continue
-                    yield pkgid; dup.add(pkgid)
-                try: name, p = db.next()
+                    if provides or self[pkgid].name == name:
+                        yield pkgid; dup.add(pkgid)
+                try:
+                    pos += 1
+                    name, p = self.prov[pos]
                 except: break
